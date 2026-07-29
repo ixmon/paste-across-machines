@@ -1,0 +1,25 @@
+node_modules/
+.vercel/
+data/
+screenshots/
+dist/
+.output/
+.nitro/
+.tanstack/
+.turbo/
+*.log
+/tmp/
+.env
+.env.*
+!.env.example
+.DS_Store
+src/routeTree.gen.ts
+
+# Sandbox / agent workspace (not part of the app)
+.grok/
+AGENTS.md
+.node_modules.lock
+vendor/
+startup.sh
+scripts/preview-thumbnail.mjs
+scripts/paste-e2e.mjs
