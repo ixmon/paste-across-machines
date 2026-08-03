@@ -359,7 +359,9 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
             <ToolBtn
               onClick={() => {
                 if (!speech.supported) {
-                  toast.error("Voice input isn’t supported here. Try Chrome or Edge on desktop or Android.");
+                  toast.error(
+                    "Voice input isn’t supported in this browser. Try Chrome, Edge, or Safari with mic permission.",
+                  );
                   return;
                 }
                 speech.toggle();
@@ -380,11 +382,26 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
             </ToolBtn>
             {speech.listening && (
               <span
-                className="hidden max-w-[12rem] truncate text-[0.6875rem] text-[var(--color-fg-muted)] sm:inline"
-                title={speech.interim || "Listening…"}
+                className="inline-flex min-w-0 max-w-[min(16rem,45vw)] items-center gap-1.5 truncate text-[0.6875rem] text-[var(--color-fg-muted)]"
+                title={
+                  speech.preview
+                    ? speech.interim
+                      ? `Hearing: ${speech.preview}`
+                      : `Captured: ${speech.preview}`
+                    : "Listening… Safari shows phrases after you pause."
+                }
               >
-                <span className="mr-1 inline-block size-1.5 animate-pulse rounded-full bg-[var(--color-fg)] align-middle" />
-                {speech.interim || "Listening…"}
+                <span
+                  className="inline-block size-1.5 shrink-0 animate-pulse rounded-full bg-[var(--color-fg)]"
+                  aria-hidden
+                />
+                <span className="truncate">
+                  {speech.preview
+                    ? speech.interim
+                      ? speech.preview
+                      : `“${speech.preview}”`
+                    : "Listening…"}
+                </span>
               </span>
             )}
             <span className="ml-auto font-mono text-[0.6875rem] text-[var(--color-fg-subtle)]">
