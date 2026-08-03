@@ -29,16 +29,20 @@ export const Route = createFileRoute("/s/$sessionId")({
   loader: async ({ params }) => {
     const parsed = parseSessionSlug(params.sessionId);
     if (!parsed) {
-      return { invalid: true as const };
+      return {
+        ok: false as const,
+        kind: "invalid" as const,
+        error: "Use three dictionary words from the home page.",
+      };
     }
     try {
       const data = await loadPaste({ data: { publicId: parsed.join("-") } });
-      return { invalid: false as const, ...data };
+      return { ok: true as const, ...data };
     } catch (e) {
-      return {
-        invalid: true as const,
-        error: e instanceof Error ? e.message : "Failed to open vault",
-      };
+      const message = e instanceof Error ? e.message : "Failed to open room";
+      const kind =
+        /invalid session|dictionary words/i.test(message) ? ("invalid" as const) : ("server" as const);
+      return { ok: false as const, kind, error: message };
     }
   },
   component: SessionPage,
@@ -48,15 +52,12 @@ function SessionPage() {
   const data = Route.useLoaderData();
   const params = Route.useParams();
 
-  if (data.invalid) {
+  if (!data.ok) {
+    const title = data.kind === "invalid" ? "Invalid room code" : "Could not open room";
     return (
       <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-4 py-16">
-        <h1 className="text-xl font-semibold tracking-tight">Invalid room code</h1>
-        <p className="mt-2 text-sm text-[var(--color-fg-muted)]">
-          {"error" in data && data.error
-            ? data.error
-            : "Use three dictionary words from the home page."}
-        </p>
+        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
+        <p className="mt-2 text-sm text-[var(--color-fg-muted)]">{data.error}</p>
         <p className="mt-1 font-mono text-xs text-[var(--color-fg-subtle)]">{params.sessionId}</p>
         <Button asChild className="mt-6 w-fit">
           <Link to="/">
@@ -72,7 +73,7 @@ function SessionPage() {
 }
 
 type VaultData = {
-  invalid: false;
+  ok: true;
   publicId: string;
   words: [string, string, string];
   content: string;
@@ -229,12 +230,10 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
     }
   };
 
-  /** Save the editor text into this room’s file directory. */
   const saveEditorAsFile = async () => {
     const name = sanitizeClientName(fileName);
     setSavingFile(true);
     try {
-      // Flush autosave first so note + file stay in sync
       if (content !== lastSaved.current) {
         await persist(content);
       }
@@ -373,7 +372,6 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
             <span className="text-[0.6875rem] text-[var(--color-fg-subtle)]">max 100 MB</span>
           </div>
 
-          {/* Save editor → room directory */}
           <div className="space-y-2 border-b border-[var(--color-border)] p-3">
             <p className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--color-fg-subtle)]">
               Save editor as file
@@ -413,7 +411,6 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
             </p>
           </div>
 
-          {/* Upload external files */}
           <div className="border-b border-[var(--color-border)] p-3">
             <input
               ref={fileInputRef}

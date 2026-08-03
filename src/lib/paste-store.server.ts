@@ -1,17 +1,14 @@
-import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { createHash, randomBytes } from "node:crypto";
 import type { FileEntry } from "./paste-types";
 import { parseSessionSlug } from "./words";
+import { getSql, type Sql } from "./db";
 
 export type { FileEntry } from "./paste-types";
 
 export const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100 MB
 export const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-/** Soft disk budget for all paste data; oldest sessions pruned first. */
+/** Soft budget for total file bytes across all rooms; oldest rooms pruned first. */
 export const DISK_BUDGET_BYTES = 800 * 1024 * 1024; // 800 MB
-
-const DATA_ROOT = path.join(process.cwd(), "data", "pastes");
 
 export type SessionMeta = {
   publicId: string;
@@ -24,28 +21,32 @@ export type SessionMeta = {
   filesBytes: number;
 };
 
-function storageKeyFromPublicId(publicId: string): string {
-  return createHash("sha256").update(publicId.toLowerCase().trim()).digest("hex");
-}
+type SessionRow = {
+  public_id: string;
+  word1: string;
+  word2: string;
+  word3: string;
+  created_at: number | string;
+  expires_at: number | string;
+  last_accessed_at: number | string;
+  note_content: string;
+  note_bytes: number | string;
+};
 
-function sessionDir(storageKey: string): string {
-  return path.join(DATA_ROOT, storageKey);
-}
+type FileRow = {
+  id: string;
+  public_id: string;
+  name: string;
+  mime: string;
+  size: number | string;
+  uploaded_at: number | string;
+  data?: unknown;
+};
 
-function metaPath(storageKey: string): string {
-  return path.join(sessionDir(storageKey), "meta.json");
-}
-
-function notePath(storageKey: string): string {
-  return path.join(sessionDir(storageKey), "note.txt");
-}
-
-function filesDir(storageKey: string): string {
-  return path.join(sessionDir(storageKey), "files");
-}
-
-function filesIndexPath(storageKey: string): string {
-  return path.join(sessionDir(storageKey), "files.json");
+function num(v: number | string | null | undefined): number {
+  if (typeof v === "number") return v;
+  if (typeof v === "string") return Number(v) || 0;
+  return 0;
 }
 
 function assertSafePublicId(publicId: string): [string, string, string] {
@@ -65,150 +66,174 @@ export class PasteError extends Error {
   }
 }
 
-async function ensureRoot(): Promise<void> {
-  await mkdir(DATA_ROOT, { recursive: true });
+function rowToMeta(row: SessionRow, filesBytes = 0): SessionMeta {
+  return {
+    publicId: row.public_id,
+    words: [row.word1, row.word2, row.word3],
+    storageKey: row.public_id,
+    createdAt: num(row.created_at),
+    expiresAt: num(row.expires_at),
+    lastAccessedAt: num(row.last_accessed_at),
+    noteBytes: num(row.note_bytes),
+    filesBytes,
+  };
 }
 
-async function readMeta(storageKey: string): Promise<SessionMeta | null> {
-  try {
-    const raw = await readFile(metaPath(storageKey), "utf8");
-    return JSON.parse(raw) as SessionMeta;
-  } catch {
-    return null;
-  }
+/** Safety net if migrations/0002_paste.sql was not applied yet (e.g. hot reload). */
+let schemaReady: Promise<void> | null = null;
+async function ensurePasteSchema(sql: Sql): Promise<void> {
+  schemaReady ??= (async () => {
+    await sql.query(`
+      CREATE TABLE IF NOT EXISTS paste_sessions (
+        public_id TEXT PRIMARY KEY,
+        word1 TEXT NOT NULL,
+        word2 TEXT NOT NULL,
+        word3 TEXT NOT NULL,
+        created_at BIGINT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        last_accessed_at BIGINT NOT NULL,
+        note_content TEXT NOT NULL DEFAULT '',
+        note_bytes INT NOT NULL DEFAULT 0
+      )
+    `);
+    await sql.query(`
+      CREATE TABLE IF NOT EXISTS paste_files (
+        id TEXT PRIMARY KEY,
+        public_id TEXT NOT NULL REFERENCES paste_sessions (public_id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        size INT NOT NULL,
+        uploaded_at BIGINT NOT NULL,
+        data BYTEA NOT NULL
+      )
+    `);
+    await sql.query(
+      `CREATE INDEX IF NOT EXISTS paste_sessions_expires_at_idx ON paste_sessions (expires_at)`,
+    );
+    await sql.query(
+      `CREATE INDEX IF NOT EXISTS paste_sessions_last_accessed_at_idx ON paste_sessions (last_accessed_at)`,
+    );
+    await sql.query(
+      `CREATE INDEX IF NOT EXISTS paste_files_public_id_idx ON paste_files (public_id)`,
+    );
+  })().catch((err) => {
+    schemaReady = null;
+    throw err;
+  });
+  await schemaReady;
 }
 
-async function writeMeta(meta: SessionMeta): Promise<void> {
-  const dir = sessionDir(meta.storageKey);
-  await mkdir(dir, { recursive: true });
-  await writeFile(metaPath(meta.storageKey), JSON.stringify(meta, null, 2), "utf8");
-}
-
-async function dirSize(dir: string): Promise<number> {
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    let total = 0;
-    for (const e of entries) {
-      const p = path.join(dir, e.name);
-      if (e.isDirectory()) total += await dirSize(p);
-      else {
-        try {
-          total += (await stat(p)).size;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    return total;
-  } catch {
-    return 0;
-  }
-}
-
-async function listAllSessionKeys(): Promise<string[]> {
-  await ensureRoot();
-  try {
-    const entries = await readdir(DATA_ROOT, { withFileTypes: true });
-    return entries.filter((e) => e.isDirectory()).map((e) => e.name);
-  } catch {
-    return [];
-  }
+async function filesBytesFor(publicId: string): Promise<number> {
+  const sql = await getSql();
+  await ensurePasteSchema(sql);
+  const rows = await sql.query<{ total: number | string | null }>(
+    `SELECT COALESCE(SUM(size), 0)::bigint AS total FROM paste_files WHERE public_id = $1`,
+    [publicId],
+  );
+  return num(rows[0]?.total);
 }
 
 export async function purgeExpiredAndOverBudget(): Promise<void> {
-  await ensureRoot();
+  const sql = await getSql();
+  await ensurePasteSchema(sql);
   const now = Date.now();
-  const keys = await listAllSessionKeys();
-  const metas: SessionMeta[] = [];
+  await sql.query(`DELETE FROM paste_sessions WHERE expires_at <= $1`, [now]);
 
-  for (const key of keys) {
-    const meta = await readMeta(key);
-    if (!meta) {
-      await rm(sessionDir(key), { recursive: true, force: true });
-      continue;
-    }
-    if (meta.expiresAt <= now) {
-      await rm(sessionDir(key), { recursive: true, force: true });
-      continue;
-    }
-    metas.push(meta);
-  }
+  const totals = await sql.query<{ total: number | string | null }>(
+    `SELECT COALESCE(SUM(size), 0)::bigint AS total FROM paste_files`,
+  );
+  let total = num(totals[0]?.total);
+  if (total <= DISK_BUDGET_BYTES) return;
 
-  type Sized = { meta: SessionMeta; size: number };
-  const sized: Sized[] = [];
-  for (const meta of metas) {
-    const size = await dirSize(sessionDir(meta.storageKey));
-    sized.push({ meta, size });
-  }
-  let total = sized.reduce((a, b) => a + b.size, 0);
-  sized.sort((a, b) => a.meta.lastAccessedAt - b.meta.lastAccessedAt);
-  while (total > DISK_BUDGET_BYTES && sized.length > 0) {
-    const victim = sized.shift()!;
-    await rm(sessionDir(victim.meta.storageKey), { recursive: true, force: true });
-    total -= victim.size;
+  const oldest = await sql.query<{ public_id: string }>(
+    `SELECT public_id FROM paste_sessions ORDER BY last_accessed_at ASC`,
+  );
+  for (const room of oldest) {
+    if (total <= DISK_BUDGET_BYTES) break;
+    const roomBytes = await filesBytesFor(room.public_id);
+    await sql.query(`DELETE FROM paste_sessions WHERE public_id = $1`, [room.public_id]);
+    total -= roomBytes;
   }
 }
 
 export async function openOrCreateSession(publicId: string): Promise<SessionMeta> {
   await purgeExpiredAndOverBudget();
   const words = assertSafePublicId(publicId);
-  const storageKey = storageKeyFromPublicId(publicId);
+  const id = words.join("-");
+  const sql = await getSql();
+  await ensurePasteSchema(sql);
   const now = Date.now();
-  let meta = await readMeta(storageKey);
 
-  if (meta && meta.expiresAt <= now) {
-    await rm(sessionDir(storageKey), { recursive: true, force: true });
-    meta = null;
+  const existing = await sql.query<SessionRow>(
+    `SELECT * FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
+    [id],
+  );
+  const row = existing[0];
+
+  if (row && num(row.expires_at) <= now) {
+    await sql.query(`DELETE FROM paste_sessions WHERE public_id = $1`, [id]);
+  } else if (row) {
+    await sql.query(
+      `UPDATE paste_sessions SET last_accessed_at = $2 WHERE public_id = $1`,
+      [id, now],
+    );
+    const filesBytes = await filesBytesFor(id);
+    return rowToMeta({ ...row, last_accessed_at: now }, filesBytes);
   }
 
-  if (!meta) {
-    meta = {
-      publicId: words.join("-"),
-      words,
-      storageKey,
-      createdAt: now,
-      expiresAt: now + SESSION_TTL_MS,
-      lastAccessedAt: now,
-      noteBytes: 0,
-      filesBytes: 0,
-    };
-    await writeMeta(meta);
-    await writeFile(notePath(storageKey), "", "utf8");
-    await mkdir(filesDir(storageKey), { recursive: true });
-    await writeFile(filesIndexPath(storageKey), "[]", "utf8");
-  } else {
-    meta.lastAccessedAt = now;
-    await writeMeta(meta);
-  }
+  const expiresAt = now + SESSION_TTL_MS;
+  await sql.query(
+    `INSERT INTO paste_sessions
+      (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_content, note_bytes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, '', 0)
+     ON CONFLICT (public_id) DO NOTHING`,
+    [id, words[0], words[1], words[2], now, expiresAt, now],
+  );
 
-  return meta;
+  const created = await sql.query<SessionRow>(
+    `SELECT * FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
+    [id],
+  );
+  if (!created[0]) {
+    throw new PasteError(500, "Could not create room. Try again.");
+  }
+  return rowToMeta(created[0], 0);
 }
 
 export async function getSession(publicId: string): Promise<SessionMeta | null> {
   await purgeExpiredAndOverBudget();
   assertSafePublicId(publicId);
-  const storageKey = storageKeyFromPublicId(publicId);
-  const meta = await readMeta(storageKey);
-  if (!meta) return null;
-  if (meta.expiresAt <= Date.now()) {
-    await rm(sessionDir(storageKey), { recursive: true, force: true });
+  const id = publicId.toLowerCase().trim();
+  const sql = await getSql();
+  await ensurePasteSchema(sql);
+  const rows = await sql.query<SessionRow>(
+    `SELECT * FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) return null;
+  if (num(row.expires_at) <= Date.now()) {
+    await sql.query(`DELETE FROM paste_sessions WHERE public_id = $1`, [id]);
     return null;
   }
-  meta.lastAccessedAt = Date.now();
-  await writeMeta(meta);
-  return meta;
+  const now = Date.now();
+  await sql.query(`UPDATE paste_sessions SET last_accessed_at = $2 WHERE public_id = $1`, [
+    id,
+    now,
+  ]);
+  return rowToMeta({ ...row, last_accessed_at: now }, await filesBytesFor(id));
 }
 
 export async function readNote(
   publicId: string,
 ): Promise<{ meta: SessionMeta; content: string }> {
   const meta = await openOrCreateSession(publicId);
-  let content = "";
-  try {
-    content = await readFile(notePath(meta.storageKey), "utf8");
-  } catch {
-    content = "";
-  }
+  const sql = await getSql();
+  const rows = await sql.query<SessionRow>(
+    `SELECT * FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
+    [meta.publicId],
+  );
+  const content = rows[0]?.note_content ?? "";
   return { meta, content };
 }
 
@@ -221,35 +246,45 @@ export async function writeNote(publicId: string, content: string): Promise<Sess
     throw new PasteError(413, "Note is too large (max 5 MB of text).");
   }
   const meta = await openOrCreateSession(publicId);
-  await writeFile(notePath(meta.storageKey), content, "utf8");
-  meta.noteBytes = bytes;
-  meta.lastAccessedAt = Date.now();
-  await writeMeta(meta);
+  const sql = await getSql();
+  const now = Date.now();
+  await sql.query(
+    `UPDATE paste_sessions
+     SET note_content = $2, note_bytes = $3, last_accessed_at = $4
+     WHERE public_id = $1`,
+    [meta.publicId, content, bytes, now],
+  );
   await purgeExpiredAndOverBudget();
-  return meta;
-}
-
-async function readFilesIndex(storageKey: string): Promise<FileEntry[]> {
-  try {
-    const raw = await readFile(filesIndexPath(storageKey), "utf8");
-    return JSON.parse(raw) as FileEntry[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeFilesIndex(storageKey: string, files: FileEntry[]): Promise<void> {
-  await writeFile(filesIndexPath(storageKey), JSON.stringify(files, null, 2), "utf8");
+  return {
+    ...meta,
+    noteBytes: bytes,
+    lastAccessedAt: now,
+  };
 }
 
 function sanitizeFileName(name: string): string {
-  const base = path.basename(name).replace(/[^\w.\- ()[\]]+/g, "_").slice(0, 180);
+  const base = name
+    .replace(/^.*[/\\]/, "")
+    .replace(/[^\w.\- ()[\]]+/g, "_")
+    .slice(0, 180);
   return base || "file";
 }
 
 export async function listFiles(publicId: string): Promise<FileEntry[]> {
   const meta = await openOrCreateSession(publicId);
-  return readFilesIndex(meta.storageKey);
+  const sql = await getSql();
+  const rows = await sql.query<FileRow>(
+    `SELECT id, public_id, name, mime, size, uploaded_at
+     FROM paste_files WHERE public_id = $1 ORDER BY uploaded_at ASC`,
+    [meta.publicId],
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    size: num(r.size),
+    mime: r.mime,
+    uploadedAt: num(r.uploaded_at),
+  }));
 }
 
 export async function saveUpload(
@@ -268,37 +303,50 @@ export async function saveUpload(
   const meta = await openOrCreateSession(publicId);
   await purgeExpiredAndOverBudget();
 
-  const files = await readFilesIndex(meta.storageKey);
-  const totalFiles = files.reduce((a, f) => a + f.size, 0);
+  const sql = await getSql();
+  const sumRows = await sql.query<{ total: number | string | null }>(
+    `SELECT COALESCE(SUM(size), 0)::bigint AS total FROM paste_files WHERE public_id = $1`,
+    [meta.publicId],
+  );
+  const totalFiles = num(sumRows[0]?.total);
   if (totalFiles + data.byteLength > MAX_FILE_BYTES * 2) {
-    throw new PasteError(413, "Session storage full. Delete files or start a new vault.");
+    throw new PasteError(413, "Session storage full. Delete files or start a new room.");
   }
 
   const id = createHash("sha256")
-    .update(`${Date.now()}-${fileName}-${data.byteLength}-${Math.random()}`)
+    .update(`${Date.now()}-${fileName}-${data.byteLength}-${randomBytes(8).toString("hex")}`)
     .digest("hex")
     .slice(0, 16);
   const safeName = sanitizeFileName(fileName);
-  const diskName = `${id}__${safeName}`;
-  const dest = path.join(filesDir(meta.storageKey), diskName);
-  await mkdir(filesDir(meta.storageKey), { recursive: true });
-  await writeFile(dest, data);
+  const uploadedAt = Date.now();
 
-  const entry: FileEntry = {
+  await sql.query(
+    `INSERT INTO paste_files (id, public_id, name, mime, size, uploaded_at, data)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [
+      id,
+      meta.publicId,
+      safeName,
+      mime || "application/octet-stream",
+      data.byteLength,
+      uploadedAt,
+      data,
+    ],
+  );
+
+  await sql.query(`UPDATE paste_sessions SET last_accessed_at = $2 WHERE public_id = $1`, [
+    meta.publicId,
+    uploadedAt,
+  ]);
+  await purgeExpiredAndOverBudget();
+
+  return {
     id,
     name: safeName,
     size: data.byteLength,
     mime: mime || "application/octet-stream",
-    uploadedAt: Date.now(),
+    uploadedAt,
   };
-  files.push(entry);
-  await writeFilesIndex(meta.storageKey, files);
-
-  meta.filesBytes = files.reduce((a, f) => a + f.size, 0);
-  meta.lastAccessedAt = Date.now();
-  await writeMeta(meta);
-  await purgeExpiredAndOverBudget();
-  return entry;
 }
 
 export async function getFileBuffer(
@@ -306,43 +354,51 @@ export async function getFileBuffer(
   fileId: string,
 ): Promise<{ entry: FileEntry; data: Buffer }> {
   const meta = await openOrCreateSession(publicId);
-  const files = await readFilesIndex(meta.storageKey);
-  const entry = files.find((f) => f.id === fileId);
-  if (!entry) throw new PasteError(404, "File not found.");
+  const sql = await getSql();
+  const rows = await sql.query<FileRow>(
+    `SELECT id, public_id, name, mime, size, uploaded_at, data
+     FROM paste_files WHERE public_id = $1 AND id = $2 LIMIT 1`,
+    [meta.publicId, fileId],
+  );
+  const row = rows[0];
+  if (!row) throw new PasteError(404, "File not found.");
 
-  const dir = filesDir(meta.storageKey);
-  const names = await readdir(dir);
-  const disk = names.find((n) => n.startsWith(`${fileId}__`));
-  if (!disk) throw new PasteError(404, "File missing on disk.");
+  let buf: Buffer;
+  const raw = row.data;
+  if (Buffer.isBuffer(raw)) {
+    buf = raw;
+  } else if (raw instanceof Uint8Array) {
+    buf = Buffer.from(raw);
+  } else if (typeof raw === "string") {
+    buf = Buffer.from(raw, "binary");
+  } else if (raw && typeof raw === "object" && "data" in (raw as object)) {
+    buf = Buffer.from((raw as { data: number[] }).data);
+  } else {
+    throw new PasteError(500, "Could not read file data.");
+  }
 
-  const data = await readFile(path.join(dir, disk));
-  return { entry, data };
+  return {
+    entry: {
+      id: row.id,
+      name: row.name,
+      size: num(row.size),
+      mime: row.mime,
+      uploadedAt: num(row.uploaded_at),
+    },
+    data: buf,
+  };
 }
 
 export async function deleteFile(publicId: string, fileId: string): Promise<void> {
   const meta = await openOrCreateSession(publicId);
-  const files = await readFilesIndex(meta.storageKey);
-  const entry = files.find((f) => f.id === fileId);
-  if (!entry) throw new PasteError(404, "File not found.");
-
-  const dir = filesDir(meta.storageKey);
-  try {
-    const names = await readdir(dir);
-    const disk = names.find((n) => n.startsWith(`${fileId}__`));
-    if (disk) await rm(path.join(dir, disk), { force: true });
-  } catch {
-    /* ignore */
-  }
-
-  const next = files.filter((f) => f.id !== fileId);
-  await writeFilesIndex(meta.storageKey, next);
-  meta.filesBytes = next.reduce((a, f) => a + f.size, 0);
-  meta.lastAccessedAt = Date.now();
-  await writeMeta(meta);
-}
-
-export async function atomicWrite(file: string, data: string | Buffer): Promise<void> {
-  const tmp = `${file}.${process.pid}.tmp`;
-  await writeFile(tmp, data);
-  await rename(tmp, file);
+  const sql = await getSql();
+  const result = await sql.query(
+    `DELETE FROM paste_files WHERE public_id = $1 AND id = $2 RETURNING id`,
+    [meta.publicId, fileId],
+  );
+  if (!result.length) throw new PasteError(404, "File not found.");
+  await sql.query(`UPDATE paste_sessions SET last_accessed_at = $2 WHERE public_id = $1`, [
+    meta.publicId,
+    Date.now(),
+  ]);
 }

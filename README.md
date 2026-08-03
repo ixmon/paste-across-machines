@@ -6,7 +6,7 @@ Temporary rooms for moving text and files between computers.
 - Normal or Vim editor
 - Save notes as files; upload/download under 100 MB
 - Autosave, light/dark/system themes
-- Everything expires after 24 hours (or sooner if disk is full)
+- Everything expires after 24 hours (or sooner if storage is full)
 
 ## Quick start
 
@@ -17,18 +17,25 @@ npm run dev
 
 App serves at `http://localhost:8080`.
 
+## Storage
+
+Rooms are stored in **Postgres** via `@/lib/db`:
+
+- **Local preview** — embedded PGLite (automatic)
+- **Deployed** — set `DATABASE_URL` to a Neon (or any Postgres) connection string
+
+Schema lives in `migrations/0002_paste.sql` and is applied on build (`npm run build` → `db:migrate`) and on PGLite startup.
+
+Filesystem under `data/` is no longer used.
+
 ## Scripts
 
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Dev server on `0.0.0.0:8080` |
-| `npm run build` | Production build (Vercel / Nitro) |
+| `npm run build` | Production build + migrations |
 | `npm run typecheck` | TypeScript check |
 | `npm run preview` | Serve production build |
-
-## Notes
-
-Room data is stored under `data/pastes/` on the server filesystem. On serverless hosts the disk is ephemeral — fine for demos, not for durable multi-region storage. For production at scale, swap the store for object storage (S3/R2/Blob) or a database.
 
 ## License
 
