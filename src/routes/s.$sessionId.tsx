@@ -10,6 +10,8 @@ import {
   FileUp,
   Link2,
   Loader2,
+  Mic,
+  MicOff,
   Save,
   Scissors,
   Trash2,
@@ -24,6 +26,7 @@ import { formatBytes, formatTimeLeft, cn } from "@/lib/utils";
 import { formatSessionLabel, parseSessionSlug } from "@/lib/words";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/hooks/use-theme";
+import { useSpeechDictation } from "@/hooks/use-speech-dictation";
 
 export const Route = createFileRoute("/s/$sessionId")({
   loader: async ({ params }) => {
@@ -145,6 +148,18 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
     },
     [persist],
   );
+
+  const contentRef = useRef(content);
+  contentRef.current = content;
+
+  const speech = useSpeechDictation({
+    getText: () => contentRef.current,
+    onFinal: (next) => onChange(next),
+  });
+
+  useEffect(() => {
+    if (speech.error) toast.error(speech.error);
+  }, [speech.error]);
 
   useEffect(() => {
     return () => {
@@ -341,9 +356,41 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
               <FilePlus2 className="size-3.5" />
               Save as file
             </ToolBtn>
+            <ToolBtn
+              onClick={() => {
+                if (!speech.supported) {
+                  toast.error("Voice input isn’t supported here. Try Chrome or Edge on desktop or Android.");
+                  return;
+                }
+                speech.toggle();
+              }}
+              title={
+                speech.listening
+                  ? "Stop voice input"
+                  : "Dictate with your microphone (browser speech recognition)"
+              }
+              active={speech.listening}
+            >
+              {speech.listening ? (
+                <MicOff className="size-3.5" />
+              ) : (
+                <Mic className="size-3.5" />
+              )}
+              {speech.listening ? "Stop" : "Voice"}
+            </ToolBtn>
+            {speech.listening && (
+              <span
+                className="hidden max-w-[12rem] truncate text-[0.6875rem] text-[var(--color-fg-muted)] sm:inline"
+                title={speech.interim || "Listening…"}
+              >
+                <span className="mr-1 inline-block size-1.5 animate-pulse rounded-full bg-[var(--color-fg)] align-middle" />
+                {speech.interim || "Listening…"}
+              </span>
+            )}
             <span className="ml-auto font-mono text-[0.6875rem] text-[var(--color-fg-subtle)]">
               {content.length.toLocaleString()} chars
               {mode === "vim" ? " · vim" : ""}
+              {speech.listening ? " · mic" : ""}
             </span>
           </div>
           <div className="min-h-0 flex-1">
@@ -527,17 +574,25 @@ function ToolBtn({
   children,
   onClick,
   title,
+  active,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   title: string;
+  active?: boolean;
 }) {
   return (
     <button
       type="button"
       title={title}
       onClick={onClick}
-      className="inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-xs)] px-2 text-xs font-medium text-[var(--color-fg-muted)] transition-colors hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]"
+      aria-pressed={active ? true : undefined}
+      className={cn(
+        "inline-flex h-8 items-center gap-1.5 rounded-[var(--radius-xs)] px-2 text-xs font-medium transition-colors",
+        active
+          ? "bg-[var(--color-surface-3)] text-[var(--color-fg)]"
+          : "text-[var(--color-fg-muted)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-fg)]",
+      )}
     >
       {children}
     </button>
