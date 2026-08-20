@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { FileEntry } from "./paste-types";
 import { parseSessionSlug } from "./words";
 import { defaultSkinFor, isRoomSkin, resolveSkin, type RoomSkinId } from "./room-skins";
+import { defaultAgentNote } from "./agent-note";
 import { getSql, type Sql } from "./db";
 
 export type { FileEntry } from "./paste-types";
@@ -198,12 +199,14 @@ export async function openOrCreateSession(publicId: string): Promise<SessionMeta
 
   const expiresAt = now + SESSION_TTL_MS;
   const skin = defaultSkinFor(id);
+  const stub = defaultAgentNote(id);
+  const stubBytes = Buffer.byteLength(stub, "utf8");
   await sql.query(
     `INSERT INTO paste_sessions
       (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_updated_at, note_content, note_bytes, skin)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, '', 0, $8)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10)
      ON CONFLICT (public_id) DO NOTHING`,
-    [id, words[0], words[1], words[2], now, expiresAt, now, skin],
+    [id, words[0], words[1], words[2], now, expiresAt, now, stub, stubBytes, skin],
   );
 
   const created = await sql.query<SessionRow>(

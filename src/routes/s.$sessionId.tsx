@@ -567,9 +567,12 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
           <div className="min-h-0 flex-1">
             <ClientOnly
               fallback={
-                <div className="flex h-full items-center justify-center text-sm text-[var(--color-fg-muted)]">
-                  Loading editor…
-                </div>
+                <pre
+                  id="paste-note"
+                  className="h-full overflow-auto whitespace-pre-wrap p-3 font-mono text-sm leading-relaxed text-[var(--color-fg)]"
+                >
+                  {content}
+                </pre>
               }
             >
               <CodeEditor
@@ -737,16 +740,19 @@ function ForAgentsCard({ publicId }: { publicId: string }) {
 
   return (
     <div className="border-t border-[var(--color-border)] p-3">
+      <p className="text-xs font-semibold text-[var(--color-fg)]">For agents</p>
+      <p className="mt-1 font-mono text-[0.6875rem] leading-relaxed text-[var(--color-fg-muted)]">
+        Follow # AGENT at the top of the note. GET /s/{publicId}.txt — append, don't
+        replace.
+      </p>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between text-left text-xs font-semibold text-[var(--color-fg)]"
+        className="mt-2 flex w-full items-center justify-between text-left text-[0.6875rem] font-medium text-[var(--color-fg-subtle)]"
         aria-expanded={open}
       >
-        For agents
-        <span className="text-[0.6875rem] font-medium text-[var(--color-fg-subtle)]">
-          {open ? "Hide" : "curl"}
-        </span>
+        curl examples
+        <span>{open ? "Hide" : "Show"}</span>
       </button>
       {open && (
         <div className="mt-2 space-y-2">

@@ -11,11 +11,18 @@ export const loadPaste = createServerFn({ method: "GET" })
     const { readNote, listFiles, PasteError } = await import("./paste-store.server");
     try {
       const { meta, content } = await readNote(data.publicId);
+      let note = content;
+      if (!note.trim()) {
+        const { writeNote } = await import("./paste-store.server");
+        const { defaultAgentNote } = await import("./agent-note");
+        note = defaultAgentNote(meta.publicId);
+        await writeNote(meta.publicId, note);
+      }
       const files = await listFiles(data.publicId);
       return {
         publicId: meta.publicId,
         words: meta.words,
-        content,
+        content: note,
         expiresAt: meta.expiresAt,
         createdAt: meta.createdAt,
         noteUpdatedAt: meta.noteUpdatedAt,
