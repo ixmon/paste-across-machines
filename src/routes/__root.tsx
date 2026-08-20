@@ -24,7 +24,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Cut and paste across machines. Temporary rooms with a three-word code, text editor, and files under 100 MB. Gone in 24 hours.",
+          "Cut and paste across machines — and to agents. Temporary three-word rooms, text, files under 100 MB. Gone in 24 hours.",
       },
       { name: "theme-color", content: "#0a0a0b" },
     ],

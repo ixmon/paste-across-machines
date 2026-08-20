@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Link2, Lock, Scissors } from "lucide-react";
+import { ArrowRight, Bot, Link2, Lock, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { TransferGraphic } from "@/components/transfer-graphic";
 import { WordCode } from "@/components/word-code";
@@ -124,8 +124,8 @@ function LandingPage() {
               Cut and paste across machines
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-[var(--color-fg-muted)]">
-              Drop text or a file into a short-lived room. Open the same three-word code — or the
-              link — on the other computer. Gone in 24 hours.
+              Drop text or a file into a short-lived room. Open the same three-word code on the
+              other computer — or point an agent at the link. Gone in 24 hours.
             </p>
           </section>
 
@@ -190,6 +190,8 @@ function LandingPage() {
             </form>
           </section>
 
+          <AgentHint slug={slug} />
+
           <p className="mt-10 flex items-start justify-center gap-2 text-center text-xs leading-relaxed text-[var(--color-fg-subtle)]">
             <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
             <span>
@@ -199,6 +201,122 @@ function LandingPage() {
           </p>
         </main>
       </div>
+    </div>
+  );
+}
+
+function AgentHint({ slug }: { slug: string }) {
+  const [open, setOpen] = useState(false);
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const roomUrl = `${origin || ""}/s/${slug}`;
+  const prompt = `Get additional context from ${roomUrl}\nFollow # AGENT at the top of the note.\nAppend your result — do not replace the whole note.`;
+  const readCmd = `curl -fsS ${origin || ""}/s/${slug}.txt`;
+  const appendCmd = `curl -fsS -X POST ${origin || ""}/api/paste/${slug}/append \\\n  -H 'Content-Type: text/plain' --data-binary @-`;
+
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(label);
+    } catch {
+      toast.message(text);
+    }
+  };
+
+  return (
+    <section className="mt-8 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-5">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-fg-muted)]">
+          <Bot className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-[var(--color-fg)]">Hand it to an agent</h2>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--color-fg-muted)]">
+            Same room, no extra protocol. Give them the link. They read the note, follow{" "}
+            <span className="font-mono"># AGENT</span>, and append. The other machine sees it live.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          className="h-9 flex-1"
+          onClick={() => void copy(prompt, "Agent prompt copied")}
+        >
+          Copy agent prompt
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+        >
+          {open ? "Hide curl" : "Show curl"}
+        </Button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          <p className="font-mono text-[0.6875rem] break-all text-[var(--color-fg-subtle)]">
+            {roomUrl || `/s/${slug}`}
+          </p>
+          <CurlBlock label="Read" cmd={readCmd} onCopy={() => void copy(readCmd, "Read command copied")} />
+          <CurlBlock
+            label="Append"
+            cmd={appendCmd}
+            onCopy={() => void copy(appendCmd, "Append command copied")}
+          />
+          <p className="text-[0.6875rem] leading-relaxed text-[var(--color-fg-subtle)]">
+            Contract:{" "}
+            <a
+              href="/llms.txt"
+              className="underline-offset-2 hover:text-[var(--color-fg)] hover:underline"
+            >
+              /llms.txt
+            </a>
+            . Append, don't PUT. Three words are a doorbell — not a vault.
+          </p>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function CurlBlock({
+  label,
+  cmd,
+  onCopy,
+}: {
+  label: string;
+  cmd: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--color-fg-subtle)]">
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="text-[0.6875rem] font-medium text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+        >
+          Copy
+        </button>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 font-mono text-[0.625rem] leading-relaxed text-[var(--color-fg-muted)]">
+        {cmd}
+      </pre>
     </div>
   );
 }
