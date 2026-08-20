@@ -166,17 +166,6 @@ html[data-theme="light"] {
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black, transparent 75%);
 }
 
-.landing-mark {
-  height: 5px;
-  background: linear-gradient(
-    90deg,
-    var(--accent-tangerine) 0%,
-    var(--accent-purple) 38%,
-    var(--accent-scale) 72%,
-    var(--accent-stripe) 100%
-  );
-}
-
 .word-chip[data-accent="0"] {
   box-shadow: inset 3px 0 0 var(--accent-tangerine);
 }

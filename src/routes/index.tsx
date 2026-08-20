@@ -3,6 +3,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ArrowRight, Bot, Link2, Lock, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { TransferGraphic } from "@/components/transfer-graphic";
+import { CutEdge } from "@/components/cut-edge";
 import { WordCode } from "@/components/word-code";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -105,7 +106,7 @@ function LandingPage() {
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
-      <div aria-hidden className="landing-mark" />
+      <CutEdge />
       <div aria-hidden className="paste-grid pointer-events-none absolute inset-0 opacity-70" />
       <div className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pb-14 pt-8 sm:px-6 sm:pt-12">
         <header className="mb-8 flex items-center gap-2.5">
@@ -122,7 +123,7 @@ function LandingPage() {
           <section className="text-center">
             <TransferGraphic className="mb-6" />
             <h1 className="font-display text-[clamp(1.5rem,4.5vw,2rem)] font-semibold leading-[1.2] tracking-[-0.03em] text-[var(--color-fg)]">
-              Cut and paste across machines
+              Agentic / human cut and paste
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-[var(--color-fg-muted)]">
               Drop text or a file into a short-lived room. Open the same three-word code on the

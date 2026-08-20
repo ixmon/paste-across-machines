@@ -19,12 +19,12 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       {
-        title: "Paste — cut and paste across machines",
+        title: "Paste — agentic / human cut and paste",
       },
       {
         name: "description",
         content:
-          "Cut and paste across machines — and to agents. Temporary three-word rooms, text, files under 100 MB. Gone in 24 hours.",
+          "Agentic / human cut and paste across machines. Temporary three-word rooms, text, files under 100 MB. Gone in 24 hours.",
       },
       { name: "theme-color", content: "#0a0a0b" },
     ],
