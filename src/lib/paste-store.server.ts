@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { FileEntry } from "./paste-types";
 import { parseSessionSlug } from "./words";
+import { defaultSkinFor, isRoomSkin, resolveSkin, type RoomSkinId } from "./room-skins";
 import { getSql, type Sql } from "./db";
 
 export type { FileEntry } from "./paste-types";
@@ -20,6 +21,7 @@ export type SessionMeta = {
   noteUpdatedAt: number;
   noteBytes: number;
   filesBytes: number;
+  skin: RoomSkinId;
 };
 
 type SessionRow = {
@@ -33,6 +35,7 @@ type SessionRow = {
   note_updated_at?: number | string | null;
   note_content: string;
   note_bytes: number | string;
+  skin?: string | null;
 };
 
 type FileRow = {
@@ -79,6 +82,7 @@ function rowToMeta(row: SessionRow, filesBytes = 0): SessionMeta {
     noteUpdatedAt: num(row.note_updated_at) || num(row.last_accessed_at) || num(row.created_at),
     noteBytes: num(row.note_bytes),
     filesBytes,
+    skin: resolveSkin(row.public_id, row.skin),
   };
 }
 
@@ -97,11 +101,15 @@ async function ensurePasteSchema(sql: Sql): Promise<void> {
         last_accessed_at BIGINT NOT NULL,
         note_updated_at BIGINT,
         note_content TEXT NOT NULL DEFAULT '',
-        note_bytes INT NOT NULL DEFAULT 0
+        note_bytes INT NOT NULL DEFAULT 0,
+        skin TEXT
       )
     `);
     await sql.query(
       `ALTER TABLE paste_sessions ADD COLUMN IF NOT EXISTS note_updated_at BIGINT`,
+    );
+    await sql.query(
+      `ALTER TABLE paste_sessions ADD COLUMN IF NOT EXISTS skin TEXT`,
     );
     await sql.query(`
       CREATE TABLE IF NOT EXISTS paste_files (
@@ -189,12 +197,13 @@ export async function openOrCreateSession(publicId: string): Promise<SessionMeta
   }
 
   const expiresAt = now + SESSION_TTL_MS;
+  const skin = defaultSkinFor(id);
   await sql.query(
     `INSERT INTO paste_sessions
-      (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_updated_at, note_content, note_bytes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, '', 0)
+      (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_updated_at, note_content, note_bytes, skin)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, '', 0, $8)
      ON CONFLICT (public_id) DO NOTHING`,
-    [id, words[0], words[1], words[2], now, expiresAt, now],
+    [id, words[0], words[1], words[2], now, expiresAt, now, skin],
   );
 
   const created = await sql.query<SessionRow>(
@@ -282,6 +291,20 @@ export async function writeNote(publicId: string, content: string): Promise<Sess
     lastAccessedAt: now,
     noteUpdatedAt: now,
   };
+}
+
+export async function setRoomSkin(publicId: string, skin: string): Promise<SessionMeta> {
+  if (!isRoomSkin(skin)) {
+    throw new PasteError(400, "Unknown room look.");
+  }
+  const meta = await openOrCreateSession(publicId);
+  const sql = await getSql();
+  await sql.query(`UPDATE paste_sessions SET skin = $2, last_accessed_at = $3 WHERE public_id = $1`, [
+    meta.publicId,
+    skin,
+    Date.now(),
+  ]);
+  return { ...meta, skin };
 }
 
 /** Append text. Creates the room if it does not exist. */

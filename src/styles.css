@@ -155,3 +155,272 @@ html[data-theme="light"] {
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black, transparent 75%);
 }
+
+/* Room identity skins — applied on [data-skin] inside the editor shell */
+.skin-wash {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: var(--skin-wash, none);
+  opacity: var(--skin-wash-opacity, 0);
+  mix-blend-mode: soft-light;
+}
+
+[data-skin] {
+  position: relative;
+}
+
+[data-skin]::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 5px;
+  z-index: 30;
+  background: var(--skin-mark, transparent);
+}
+
+html[data-theme="dark"] [data-skin="tangerine"] {
+  --color-bg: #140c08;
+  --color-surface: #24140c;
+  --color-surface-2: #321c10;
+  --color-surface-3: #3f2414;
+  --color-fg: #fff1e6;
+  --color-fg-muted: #e8b89a;
+  --color-fg-subtle: #c4845c;
+  --color-primary: #ff7a3d;
+  --color-primary-fg: #1a0b05;
+  --color-accent: #ffb347;
+  --color-ring: color-mix(in oklab, #ff7a3d 50%, transparent);
+  --color-border: color-mix(in oklab, #ffb347 18%, transparent);
+  --skin-mark: linear-gradient(90deg, #ff4d00, #ffb347, #ff7a3d);
+}
+
+html[data-theme="light"] [data-skin="tangerine"] {
+  --color-bg: #fff4eb;
+  --color-surface: #fffaf6;
+  --color-surface-2: #ffe6d4;
+  --color-surface-3: #ffd4b8;
+  --color-fg: #3b1608;
+  --color-fg-muted: #8a4a28;
+  --color-fg-subtle: #b56a40;
+  --color-primary: #e85d12;
+  --color-primary-fg: #fff7f0;
+  --color-accent: #c2410c;
+  --color-ring: color-mix(in oklab, #e85d12 35%, transparent);
+  --color-border: color-mix(in oklab, #c2410c 16%, transparent);
+  --skin-mark: linear-gradient(90deg, #e85d12, #fb923c, #f97316);
+}
+
+html[data-theme="dark"] [data-skin="puce"] {
+  --color-bg: #14090c;
+  --color-surface: #221116;
+  --color-surface-2: #301820;
+  --color-surface-3: #3d1f28;
+  --color-fg: #f8e6ea;
+  --color-fg-muted: #c99aa4;
+  --color-fg-subtle: #8f5d68;
+  --color-primary: #c47a86;
+  --color-primary-fg: #1a080c;
+  --color-accent: #8b3a4a;
+  --color-ring: color-mix(in oklab, #c47a86 45%, transparent);
+  --color-border: color-mix(in oklab, #c47a86 16%, transparent);
+  --skin-mark: #6e2d3a;
+}
+
+html[data-theme="light"] [data-skin="puce"] {
+  --color-bg: #f6ecee;
+  --color-surface: #fbf6f7;
+  --color-surface-2: #eddde1;
+  --color-surface-3: #e0c8ce;
+  --color-fg: #3a151c;
+  --color-fg-muted: #6e2d3a;
+  --color-fg-subtle: #8a4a56;
+  --color-primary: #6e2d3a;
+  --color-primary-fg: #fdf6f7;
+  --color-accent: #9b4455;
+  --color-ring: color-mix(in oklab, #6e2d3a 30%, transparent);
+  --color-border: color-mix(in oklab, #6e2d3a 14%, transparent);
+  --skin-mark: #6e2d3a;
+}
+
+html[data-theme="dark"] [data-skin="midnight-purple"] {
+  --color-bg: #0c0618;
+  --color-surface: #160b2a;
+  --color-surface-2: #1f1140;
+  --color-surface-3: #2a1756;
+  --color-fg: #f3e8ff;
+  --color-fg-muted: #c4b5fd;
+  --color-fg-subtle: #7c3aed;
+  --color-primary: #a78bfa;
+  --color-primary-fg: #1a0a2e;
+  --color-accent: #7c3aed;
+  --color-ring: color-mix(in oklab, #a78bfa 50%, transparent);
+  --color-border: color-mix(in oklab, #a78bfa 18%, transparent);
+  --skin-mark: linear-gradient(90deg, #4c1d95, #7c3aed, #c4b5fd);
+}
+
+html[data-theme="light"] [data-skin="midnight-purple"] {
+  --color-bg: #f4eefc;
+  --color-surface: #fbf8ff;
+  --color-surface-2: #ede4fe;
+  --color-surface-3: #ddd0fe;
+  --color-fg: #2e1065;
+  --color-fg-muted: #5b21b6;
+  --color-fg-subtle: #7c3aed;
+  --color-primary: #5b21b6;
+  --color-primary-fg: #faf5ff;
+  --color-accent: #6d28d9;
+  --color-ring: color-mix(in oklab, #5b21b6 30%, transparent);
+  --color-border: color-mix(in oklab, #5b21b6 14%, transparent);
+  --skin-mark: linear-gradient(90deg, #4c1d95, #7c3aed, #a78bfa);
+}
+
+html[data-theme="dark"] [data-skin="glossy-black"],
+html[data-theme="light"] [data-skin="glossy-black"] {
+  --color-bg: #050505;
+  --color-surface: #0c0c0c;
+  --color-surface-2: #161616;
+  --color-surface-3: #222;
+  --color-fg: #f5f5f5;
+  --color-fg-muted: #a3a3a3;
+  --color-fg-subtle: #737373;
+  --color-primary: #ffffff;
+  --color-primary-fg: #050505;
+  --color-accent: #d4d4d4;
+  --color-ring: color-mix(in oklab, #fff 40%, transparent);
+  --color-border: color-mix(in oklab, #fff 16%, transparent);
+  --color-border-strong: color-mix(in oklab, #fff 32%, transparent);
+  --shadow-sm: 0 1px 0 color-mix(in oklab, #fff 8%, transparent),
+    0 12px 32px color-mix(in oklab, #000 70%, transparent);
+  --skin-mark: linear-gradient(90deg, #111, #9ca3af, #111);
+}
+
+html[data-theme="dark"] [data-skin="plaid"],
+html[data-theme="light"] [data-skin="plaid"] {
+  --skin-wash-opacity: 0.55;
+  --skin-wash:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in oklab, #9b1b30 55%, transparent) 0 10px,
+      transparent 10px 22px
+    ),
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in oklab, #1f4d2a 45%, transparent) 0 10px,
+      transparent 10px 22px
+    );
+  --skin-mark:
+    repeating-linear-gradient(
+      90deg,
+      #9b1b30 0 8px,
+      #1f4d2a 8px 16px,
+      #c5a35a 16px 20px,
+      #1f4d2a 20px 28px
+    );
+}
+
+html[data-theme="dark"] [data-skin="plaid"] {
+  --color-bg: #120a0c;
+  --color-surface: #1c1014;
+  --color-surface-2: #2a181c;
+  --color-fg: #f3e6e8;
+  --color-primary: #e8c27a;
+  --color-primary-fg: #1a0e08;
+  --color-accent: #9b1b30;
+}
+
+html[data-theme="light"] [data-skin="plaid"] {
+  --color-bg: #f6efe8;
+  --color-surface: #fffaf4;
+  --color-surface-2: #eadfd4;
+  --color-fg: #2a1216;
+  --color-primary: #9b1b30;
+  --color-primary-fg: #fff8f0;
+  --color-accent: #1f4d2a;
+}
+
+html[data-theme="dark"] [data-skin="diagonal-stripe"],
+html[data-theme="light"] [data-skin="diagonal-stripe"] {
+  --skin-wash-opacity: 0.4;
+  --skin-wash: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, #f59e0b 50%, transparent) 0 8px,
+    color-mix(in oklab, #111 35%, transparent) 8px 16px
+  );
+  --skin-mark: repeating-linear-gradient(
+    -45deg,
+    #f59e0b 0 6px,
+    #111 6px 12px,
+    #fafafa 12px 14px
+  );
+}
+
+html[data-theme="dark"] [data-skin="diagonal-stripe"] {
+  --color-bg: #12100a;
+  --color-surface: #1c1910;
+  --color-surface-2: #2a2416;
+  --color-fg: #fef3c7;
+  --color-primary: #f59e0b;
+  --color-primary-fg: #1a1408;
+  --color-accent: #fbbf24;
+}
+
+html[data-theme="light"] [data-skin="diagonal-stripe"] {
+  --color-bg: #fffbeb;
+  --color-surface: #fffef7;
+  --color-surface-2: #fde68a;
+  --color-fg: #1c1508;
+  --color-primary: #b45309;
+  --color-primary-fg: #fffbeb;
+  --color-accent: #d97706;
+}
+
+html[data-theme="dark"] [data-skin="dragon-scales"],
+html[data-theme="light"] [data-skin="dragon-scales"] {
+  --skin-wash-opacity: 0.55;
+  --skin-wash:
+    radial-gradient(circle at 50% 0, color-mix(in oklab, #22c55e 40%, transparent) 18px, transparent 19px),
+    radial-gradient(circle at 0 50%, color-mix(in oklab, #14532d 50%, transparent) 18px, transparent 19px);
+  --skin-mark: linear-gradient(90deg, #14532d, #22c55e, #a3e635, #14532d);
+}
+
+html[data-theme="dark"] [data-skin="dragon-scales"] {
+  --color-bg: #06140c;
+  --color-surface: #0c1f14;
+  --color-surface-2: #143322;
+  --color-fg: #dcfce7;
+  --color-primary: #4ade80;
+  --color-primary-fg: #052e16;
+  --color-accent: #86efac;
+}
+
+html[data-theme="light"] [data-skin="dragon-scales"] {
+  --color-bg: #ecfdf3;
+  --color-surface: #f7fef9;
+  --color-surface-2: #dcfce7;
+  --color-fg: #14532d;
+  --color-primary: #166534;
+  --color-primary-fg: #f0fdf4;
+  --color-accent: #15803d;
+}
+
+[data-skin="dragon-scales"] .skin-wash {
+  background-size: 36px 20px;
+}
+
+[data-skin-swatch="plain"] { background: #a1a1aa; }
+[data-skin-swatch="tangerine"] { background: #ff7a3d; }
+[data-skin-swatch="puce"] { background: #6e2d3a; }
+[data-skin-swatch="midnight-purple"] { background: #5b21b6; }
+[data-skin-swatch="glossy-black"] { background: #111; }
+[data-skin-swatch="plaid"] {
+  background:
+    repeating-linear-gradient(90deg, #9b1b30 0 4px, #1f4d2a 4px 8px),
+    repeating-linear-gradient(0deg, #9b1b30 0 4px, #c5a35a 4px 8px);
+}
+[data-skin-swatch="diagonal-stripe"] {
+  background: repeating-linear-gradient(-45deg, #f59e0b 0 4px, #111 4px 8px);
+}
+[data-skin-swatch="dragon-scales"] { background: #166534; }

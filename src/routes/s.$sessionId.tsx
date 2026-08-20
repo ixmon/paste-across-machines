@@ -21,14 +21,17 @@ import { toast } from "sonner";
 import { CodeEditor, type EditorMode } from "@/components/code-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loadPaste, removePasteFile, savePaste } from "@/lib/paste.functions";
+import { loadPaste, removePasteFile, savePaste, saveRoomSkin } from "@/lib/paste.functions";
 import type { FileEntry } from "@/lib/paste-types";
 import { formatBytes, formatTimeLeft, cn } from "@/lib/utils";
 import { formatSessionLabel, parseSessionSlug } from "@/lib/words";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { SkinPicker } from "@/components/skin-picker";
 import { useTheme } from "@/hooks/use-theme";
 import { useSpeechDictation } from "@/hooks/use-speech-dictation";
 import { fileIdsKey, useRoomSync, type RemoteSnapshot } from "@/hooks/use-room-sync";
+import { readEditorMode, writeEditorMode } from "@/lib/editor-mode";
+import { isRoomSkin, resolveSkin, skinLabel, type RoomSkinId } from "@/lib/room-skins";
 
 type SessionLoaderResult =
   | {
@@ -39,6 +42,7 @@ type SessionLoaderResult =
       expiresAt: number;
       createdAt: number;
       noteUpdatedAt?: number;
+      skin?: RoomSkinId;
       files: FileEntry[];
     }
   | { ok: false; kind: "invalid" | "missing" | "server"; error: string };
@@ -152,7 +156,10 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
   const { resolved: appearance } = useTheme();
   const [content, setContent] = useState(initial.content);
   const [files, setFiles] = useState(initial.files);
-  const [mode, setMode] = useState<EditorMode>("normal");
+  const [mode, setModeState] = useState<EditorMode>("normal");
+  const [skin, setSkin] = useState<RoomSkinId>(() =>
+    resolveSkin(initial.publicId, initial.skin),
+  );
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [expiresAt, setExpiresAt] = useState(initial.expiresAt);
   const [uploading, setUploading] = useState(false);
@@ -168,6 +175,27 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
   const [conflict, setConflict] = useState<RemoteSnapshot | null>(null);
   const [liveAt, setLiveAt] = useState<number | null>(null);
   const dismissedRemote = useRef<string | null>(null);
+
+  useEffect(() => {
+    setModeState(readEditorMode());
+  }, []);
+
+  const setMode = useCallback((next: EditorMode) => {
+    setModeState(next);
+    writeEditorMode(next);
+  }, []);
+
+  const persistSkin = useCallback(
+    async (next: RoomSkinId) => {
+      setSkin(next);
+      try {
+        await saveRoomSkin({ data: { publicId: initial.publicId, skin: next } });
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Could not save room look");
+      }
+    },
+    [initial.publicId],
+  );
 
   useEffect(() => {
     const id = window.setInterval(() => setTimeLabel(formatTimeLeft(expiresAt)), 30_000);
@@ -240,6 +268,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
     getLocal: () => contentRef.current,
     getSynced: () => lastSaved.current,
     getFileIds: () => fileIdsKey(filesRef.current),
+    getSkin: () => skin,
     onApply: applyRemote,
     onConflict: (snap) => {
       if (snap.content === dismissedRemote.current) return;
@@ -247,6 +276,9 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
       setExpiresAt(snap.expiresAt);
     },
     onClearConflict: () => setConflict(null),
+    onSkin: (next) => {
+      if (isRoomSkin(next)) setSkin(next);
+    },
   });
 
   const acceptRemote = () => {
@@ -400,8 +432,12 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
   };
 
   return (
-    <div className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--color-bg)]">
-      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 sm:px-4">
+    <div
+      data-skin={skin}
+      className="relative flex h-dvh min-h-0 flex-col overflow-hidden bg-[var(--color-bg)]"
+    >
+      <div aria-hidden className="skin-wash" />
+      <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 sm:px-4">
         <Button asChild variant="ghost" size="sm" className="shrink-0">
           <Link to="/">
             <ArrowLeft className="size-4" />
@@ -411,7 +447,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold tracking-tight">{label}</p>
           <p className="truncate font-mono text-[0.6875rem] text-[var(--color-fg-subtle)]">
-            {initial.publicId} · {timeLabel}
+            {initial.publicId} · {skinLabel(skin)} · {timeLabel}
             {liveAt ? " · live" : ""}
           </p>
         </div>
@@ -421,6 +457,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
           <span className="hidden md:inline">Share</span>
         </Button>
         <ThemeToggle />
+        <SkinPicker value={skin} onChange={(id) => void persistSkin(id)} />
         <div
           className="flex rounded-[var(--radius-sm)] border border-[var(--color-border)] p-0.5"
           role="group"
@@ -436,7 +473,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
       </header>
 
       {conflict && (
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 sm:px-4">
+        <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 sm:px-4">
           <p className="min-w-0 flex-1 text-xs text-[var(--color-fg)]">
             Updated on another machine. Reload to take that version — or keep typing; your next save
             wins.
@@ -451,7 +488,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-[var(--color-border)] lg:border-b-0 lg:border-r">
           <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-2 py-1.5">
             <ToolBtn onClick={() => void cutAll()} title="Cut all">
@@ -539,7 +576,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
                 value={content}
                 onChange={onChange}
                 mode={mode}
-                appearance={appearance}
+                appearance={skin === "glossy-black" ? "dark" : appearance}
                 className="h-full"
                 placeholder="Start typing… notes autosave. Use “Save as file” to put a copy in the Files list."
               />

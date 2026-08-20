@@ -31,8 +31,9 @@ import { markdown } from "@codemirror/lang-markdown";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { vim } from "@replit/codemirror-vim";
 import type { ResolvedTheme } from "@/lib/theme";
+import type { EditorMode } from "@/lib/editor-mode";
 
-export type EditorMode = "normal" | "vim";
+export type { EditorMode };
 
 type CodeEditorProps = {
   value: string;

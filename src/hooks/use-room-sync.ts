@@ -6,6 +6,7 @@ export type RemoteSnapshot = {
   files: FileEntry[];
   noteUpdatedAt: number;
   expiresAt: number;
+  skin?: string;
 };
 
 type UseRoomSyncArgs = {
@@ -13,10 +14,12 @@ type UseRoomSyncArgs = {
   getLocal: () => string;
   getSynced: () => string;
   getFileIds: () => string;
+  getSkin?: () => string;
   /** Apply remote content/files. Caller should treat this as already-on-server. */
   onApply: (snap: RemoteSnapshot, kind: "content" | "files") => void;
   onConflict: (snap: RemoteSnapshot) => void;
   onClearConflict?: () => void;
+  onSkin?: (skin: string) => void;
   enabled?: boolean;
 };
 
@@ -34,13 +37,33 @@ export function useRoomSync({
   getLocal,
   getSynced,
   getFileIds,
+  getSkin,
   onApply,
   onConflict,
   onClearConflict,
+  onSkin,
   enabled = true,
 }: UseRoomSyncArgs) {
-  const refs = useRef({ getLocal, getSynced, getFileIds, onApply, onConflict, onClearConflict });
-  refs.current = { getLocal, getSynced, getFileIds, onApply, onConflict, onClearConflict };
+  const refs = useRef({
+    getLocal,
+    getSynced,
+    getFileIds,
+    getSkin,
+    onApply,
+    onConflict,
+    onClearConflict,
+    onSkin,
+  });
+  refs.current = {
+    getLocal,
+    getSynced,
+    getFileIds,
+    getSkin,
+    onApply,
+    onConflict,
+    onClearConflict,
+    onSkin,
+  };
 
   useEffect(() => {
     if (!enabled || typeof window === "undefined") return;
@@ -58,8 +81,17 @@ export function useRoomSync({
         });
         if (!res.ok || cancelled) return;
         const data = (await res.json()) as RemoteSnapshot;
-        const { getLocal, getSynced, getFileIds, onApply, onConflict, onClearConflict } =
-          refs.current;
+        const {
+          getLocal,
+          getSynced,
+          getFileIds,
+          getSkin,
+          onApply,
+          onConflict,
+          onClearConflict,
+          onSkin,
+        } = refs.current;
+        if (data.skin && data.skin !== getSkin?.()) onSkin?.(data.skin);
         const synced = getSynced();
         const local = getLocal();
         const contentChanged = data.content !== synced;

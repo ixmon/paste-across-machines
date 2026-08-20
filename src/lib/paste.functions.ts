@@ -19,6 +19,7 @@ export const loadPaste = createServerFn({ method: "GET" })
         expiresAt: meta.expiresAt,
         createdAt: meta.createdAt,
         noteUpdatedAt: meta.noteUpdatedAt,
+        skin: meta.skin,
         files,
       };
     } catch (e) {
@@ -73,6 +74,24 @@ export const removePasteFile = createServerFn({ method: "POST" })
     try {
       await deleteFile(data.publicId, data.fileId);
       return { ok: true as const };
+    } catch (e) {
+      if (e instanceof PasteError) throw new Error(e.message);
+      throw e;
+    }
+  });
+
+export const saveRoomSkin = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      publicId: z.string().min(5).max(120),
+      skin: z.string().min(1).max(40),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { setRoomSkin, PasteError } = await import("./paste-store.server");
+    try {
+      const meta = await setRoomSkin(data.publicId, data.skin);
+      return { skin: meta.skin };
     } catch (e) {
       if (e instanceof PasteError) throw new Error(e.message);
       throw e;
