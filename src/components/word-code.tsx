@@ -36,10 +36,11 @@ export function WordCode({ words, onChange, className }: WordCodeProps) {
               title={`Change word ${i + 1}`}
               aria-label={`Word ${i + 1}: ${words[i]}. Click to change.`}
               className={cn(
-                "group inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3.5 py-2.5 transition-[border-color,background-color] duration-[var(--motion-quick)]",
+                "word-chip group inline-flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-bg)] px-3.5 py-2.5 transition-[border-color,background-color,box-shadow] duration-[var(--motion-quick)]",
                 "hover:border-[var(--color-border-strong)] hover:bg-[var(--color-surface-2)]",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-ring)]",
               )}
+              data-accent={i}
             >
               <span className="font-mono text-sm font-medium tracking-tight text-[var(--color-fg)] sm:text-base">
                 {words[i]}

@@ -105,10 +105,11 @@ function LandingPage() {
 
   return (
     <div className="relative min-h-dvh overflow-x-hidden">
+      <div aria-hidden className="landing-mark" />
       <div aria-hidden className="paste-grid pointer-events-none absolute inset-0 opacity-70" />
       <div className="relative mx-auto flex min-h-dvh w-full max-w-lg flex-col px-4 pb-14 pt-8 sm:px-6 sm:pt-12">
         <header className="mb-8 flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-fg)]">
+          <span className="logo-mark flex h-9 w-9 items-center justify-center rounded-[var(--radius-md)] border text-[var(--accent-tangerine)]">
             <Scissors className="size-4" aria-hidden />
           </span>
           <div>

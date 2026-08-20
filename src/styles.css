@@ -65,6 +65,11 @@ html[data-theme="dark"] {
   --color-success-fg: #bbf7d0;
   --shadow-sm: 0 1px 0 color-mix(in oklab, #000 40%, transparent),
     0 8px 24px color-mix(in oklab, #000 28%, transparent);
+  --accent-tangerine: #ff7a3d;
+  --accent-puce: #c47a86;
+  --accent-purple: #a78bfa;
+  --accent-stripe: #f59e0b;
+  --accent-scale: #4ade80;
 }
 
 /* Light — quiet paper surfaces, same structure */
@@ -89,6 +94,11 @@ html[data-theme="light"] {
   --color-success-fg: #166534;
   --shadow-sm: 0 1px 0 color-mix(in oklab, #000 4%, transparent),
     0 8px 24px color-mix(in oklab, #000 6%, transparent);
+  --accent-tangerine: #e85d12;
+  --accent-puce: #6e2d3a;
+  --accent-purple: #5b21b6;
+  --accent-stripe: #b45309;
+  --accent-scale: #166534;
 }
 
 @layer base {
@@ -154,6 +164,33 @@ html[data-theme="light"] {
     linear-gradient(to bottom, color-mix(in oklab, var(--color-fg) 4%, transparent) 1px, transparent 1px);
   background-size: 48px 48px;
   mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, black, transparent 75%);
+}
+
+.landing-mark {
+  height: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--accent-tangerine) 0%,
+    var(--accent-purple) 38%,
+    var(--accent-scale) 72%,
+    var(--accent-stripe) 100%
+  );
+}
+
+.word-chip[data-accent="0"] {
+  box-shadow: inset 3px 0 0 var(--accent-tangerine);
+}
+.word-chip[data-accent="1"] {
+  box-shadow: inset 3px 0 0 var(--accent-purple);
+}
+.word-chip[data-accent="2"] {
+  box-shadow: inset 3px 0 0 var(--accent-scale);
+}
+
+.logo-mark {
+  color: var(--accent-tangerine);
+  border-color: color-mix(in oklab, var(--accent-tangerine) 35%, var(--color-border));
+  background: color-mix(in oklab, var(--accent-tangerine) 10%, var(--color-surface));
 }
 
 /* Room identity skins — applied on [data-skin] inside the editor shell */
