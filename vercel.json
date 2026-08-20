@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/s/:id.txt",
+      "destination": "/api/paste/:id?format=txt"
+    }
+  ]
+}

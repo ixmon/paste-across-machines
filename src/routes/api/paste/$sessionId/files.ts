@@ -39,21 +39,22 @@ export const Route = createFileRoute("/api/paste/$sessionId/files")({
           return Response.json({ error: "Upload failed" }, { status: 500 });
         }
       },
-      GET: async ({ params }) => {
-        const { listFiles, openOrCreateSession, PasteError } = await import(
-          "@/lib/paste-store.server"
-        );
-        const parsed = parseSessionSlug(params.sessionId);
-        if (!parsed) {
+      GET: async ({ params, request }) => {
+        const { listFiles, PasteError } = await import("@/lib/paste-store.server");
+        const { gate, parsePublicId, pasteCatch } = await import("@/lib/paste-api.server");
+        const blocked = gate(request, "read");
+        if (blocked) return blocked;
+        const id = parsePublicId(params.sessionId);
+        if (!id) {
+          gate(request, "miss");
           return Response.json({ error: "Invalid session code" }, { status: 400 });
         }
         try {
-          await openOrCreateSession(parsed.join("-"));
-          const files = await listFiles(parsed.join("-"));
+          const files = await listFiles(id);
           return Response.json(files);
         } catch (e) {
           if (e instanceof PasteError) {
-            return Response.json({ error: e.message }, { status: e.status });
+            return pasteCatch(e, request);
           }
           return Response.json({ error: "Failed to list files" }, { status: 500 });
         }

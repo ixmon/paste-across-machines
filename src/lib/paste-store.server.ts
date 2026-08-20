@@ -227,7 +227,8 @@ export async function getSession(publicId: string): Promise<SessionMeta | null> 
 export async function readNote(
   publicId: string,
 ): Promise<{ meta: SessionMeta; content: string }> {
-  const meta = await openOrCreateSession(publicId);
+  const meta = await getSession(publicId);
+  if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const rows = await sql.query<SessionRow>(
     `SELECT * FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
@@ -235,6 +236,11 @@ export async function readNote(
   );
   const content = rows[0]?.note_content ?? "";
   return { meta, content };
+}
+
+/** Create an empty room if missing. Does not overwrite an existing note. */
+export async function ensureSession(publicId: string): Promise<SessionMeta> {
+  return openOrCreateSession(publicId);
 }
 
 export async function writeNote(publicId: string, content: string): Promise<SessionMeta> {
@@ -262,6 +268,33 @@ export async function writeNote(publicId: string, content: string): Promise<Sess
   };
 }
 
+/** Append text. Creates the room if it does not exist. */
+export async function appendNote(
+  publicId: string,
+  chunk: string,
+): Promise<{ meta: SessionMeta; content: string }> {
+  if (typeof chunk !== "string") {
+    throw new PasteError(400, "Body must be text.");
+  }
+  if (chunk.length === 0) {
+    throw new PasteError(400, "Empty append.");
+  }
+  const existing = await getSession(publicId);
+  let previous = "";
+  if (existing) {
+    const sql = await getSql();
+    const rows = await sql.query<SessionRow>(
+      `SELECT note_content FROM paste_sessions WHERE public_id = $1 LIMIT 1`,
+      [existing.publicId],
+    );
+    previous = rows[0]?.note_content ?? "";
+  }
+  const sep = previous.length === 0 || previous.endsWith("\n") ? "" : "\n";
+  const next = previous + sep + chunk;
+  const meta = await writeNote(publicId, next);
+  return { meta, content: next };
+}
+
 function sanitizeFileName(name: string): string {
   const base = name
     .replace(/^.*[/\\]/, "")
@@ -271,7 +304,8 @@ function sanitizeFileName(name: string): string {
 }
 
 export async function listFiles(publicId: string): Promise<FileEntry[]> {
-  const meta = await openOrCreateSession(publicId);
+  const meta = await getSession(publicId);
+  if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const rows = await sql.query<FileRow>(
     `SELECT id, public_id, name, mime, size, uploaded_at
@@ -353,7 +387,8 @@ export async function getFileBuffer(
   publicId: string,
   fileId: string,
 ): Promise<{ entry: FileEntry; data: Buffer }> {
-  const meta = await openOrCreateSession(publicId);
+  const meta = await getSession(publicId);
+  if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const rows = await sql.query<FileRow>(
     `SELECT id, public_id, name, mime, size, uploaded_at, data
@@ -390,7 +425,8 @@ export async function getFileBuffer(
 }
 
 export async function deleteFile(publicId: string, fileId: string): Promise<void> {
-  const meta = await openOrCreateSession(publicId);
+  const meta = await getSession(publicId);
+  if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const result = await sql.query(
     `DELETE FROM paste_files WHERE public_id = $1 AND id = $2 RETURNING id`,

@@ -54,19 +54,46 @@ function LandingPage() {
     setReady(true);
   }, []);
 
+  const [opening, setOpening] = useState(false);
+
+  const ensureRoom = useCallback(async (id: string) => {
+    const res = await fetch(`/api/paste/${id}`, { method: "POST" });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(err?.error || `Could not create room (${res.status})`);
+    }
+  }, []);
+
   const openVault = useCallback(
-    (target?: string) => {
+    async (target?: string, { create }: { create: boolean } = { create: true }) => {
       const id = normalizeSessionInput(target ?? slug);
       if (!id) {
         toast.error("Enter exactly three valid dictionary words.");
         return;
       }
+      if (create) {
+        setOpening(true);
+        try {
+          await ensureRoom(id);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Could not create room");
+          setOpening(false);
+          return;
+        }
+        setOpening(false);
+      }
       void navigate({ to: "/s/$sessionId", params: { sessionId: id } });
     },
-    [navigate, slug],
+    [navigate, slug, ensureRoom],
   );
 
   const copyLink = async () => {
+    try {
+      await ensureRoom(slug);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create room");
+      return;
+    }
     const url = `${window.location.origin}/s/${slug}`;
     try {
       await navigator.clipboard.writeText(url);
@@ -126,8 +153,8 @@ function LandingPage() {
             )}
 
             <div className="mt-6 flex flex-col gap-2.5">
-              <Button size="lg" className="w-full" onClick={() => openVault()}>
-                Open room
+              <Button size="lg" className="w-full" disabled={opening} onClick={() => void openVault()}>
+                {opening ? "Opening…" : "Open room"}
                 <ArrowRight className="size-4" />
               </Button>
               <Button size="lg" variant="secondary" className="w-full" onClick={() => void copyLink()}>
@@ -145,7 +172,7 @@ function LandingPage() {
               className="flex gap-2"
               onSubmit={(e) => {
                 e.preventDefault();
-                openVault(manual);
+                openVault(manual, { create: false });
               }}
             >
               <Input

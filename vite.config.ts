@@ -119,7 +119,72 @@ function authPopupPlugin(): Plugin {
   };
 }
 
-// `0.0.0.0:8080` is the live-preview contract — don't change host/port.
+/**
+ * Serve GET /s/{w1}-{w2}-{w3}.txt as text/plain before the SPA can swallow the
+ * `.txt` suffix as part of `$sessionId`.
+ */
+function pasteTxtPlugin(): Plugin {
+  return {
+    name: "paste-txt-route",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        try {
+          const rawUrl = req.url ?? "";
+          const pathOnly = rawUrl.split("?", 1)[0] ?? "";
+          const match = pathOnly.match(/^\/s\/([a-z]+(?:-[a-z]+){2})\.txt$/i);
+          if (!match) {
+            next();
+            return;
+          }
+          const method = (req.method ?? "GET").toUpperCase();
+          if (method === "OPTIONS") {
+            res.statusCode = 204;
+            res.setHeader("access-control-allow-origin", "*");
+            res.setHeader("access-control-allow-methods", "GET, OPTIONS");
+            res.end();
+            return;
+          }
+          if (method !== "GET" && method !== "HEAD") {
+            res.statusCode = 405;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end("Method Not Allowed");
+            return;
+          }
+
+          const publicId = match[1]!.toLowerCase();
+          const mod = (await server.ssrLoadModule("/src/lib/paste-store.server.ts")) as {
+            readNote: (id: string) => Promise<{ content: string }>;
+            PasteError: new (status: number, message: string) => Error & { status: number };
+          };
+          try {
+            const { content } = await mod.readNote(publicId);
+            res.statusCode = 200;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.setHeader("cache-control", "private, no-store");
+            res.setHeader("x-robots-tag", "noindex, nofollow, noarchive");
+            res.setHeader("access-control-allow-origin", "*");
+            res.end(method === "HEAD" ? "" : content);
+          } catch (e) {
+            const status = e instanceof mod.PasteError ? e.status : 500;
+            const message = e instanceof Error ? e.message : "Request failed";
+            res.statusCode = status === 404 || status === 400 ? status : 500;
+            res.setHeader("content-type", "application/json; charset=utf-8");
+            res.setHeader("x-robots-tag", "noindex, nofollow");
+            res.end(JSON.stringify({ error: message }));
+          }
+        } catch (err) {
+          console.error("[paste] .txt handler failed:", err);
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.setHeader("content-type", "text/plain; charset=utf-8");
+            res.end("txt handler failed");
+          }
+        }
+      });
+    },
+  };
+}
 // Keep `nitro` gated to `build` (the Vercel deploy target): enabled in dev it
 // opens a second dev-server port, which breaks the single-port preview.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
@@ -137,6 +202,7 @@ export default defineConfig(({ command }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    pasteTxtPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     tailwindcss(),

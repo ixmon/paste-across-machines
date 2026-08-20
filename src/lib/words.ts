@@ -288,15 +288,32 @@ export function normalizeWord(word: string): string {
 export function pickRandomWord(exclude?: string): string {
   const len = WORD_LIST.length;
   if (len === 0) return "apple";
-  let word = WORD_LIST[Math.floor(Math.random() * len)] ?? "apple";
+  let word = WORD_LIST[secureRandomInt(len)] ?? "apple";
   if (exclude && len > 1) {
     let guard = 0;
     while (word === exclude && guard < 20) {
-      word = WORD_LIST[Math.floor(Math.random() * len)] ?? "apple";
+      word = WORD_LIST[secureRandomInt(len)] ?? "apple";
       guard++;
     }
   }
   return word;
+}
+
+/** Unbiased CSPRNG index in [0, max). */
+function secureRandomInt(max: number): number {
+  if (max <= 0) return 0;
+  const cryptoObj = globalThis.crypto;
+  if (!cryptoObj?.getRandomValues) {
+    return Math.floor(Math.random() * max);
+  }
+  const limit = Math.floor(0x100000000 / max) * max;
+  const buf = new Uint32Array(1);
+  let x = 0;
+  do {
+    cryptoObj.getRandomValues(buf);
+    x = buf[0]!;
+  } while (x >= limit);
+  return x % max;
 }
 
 export function wordsToSlug(words: [string, string, string]): string {

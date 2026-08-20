@@ -28,46 +28,102 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/hooks/use-theme";
 import { useSpeechDictation } from "@/hooks/use-speech-dictation";
 
+type SessionLoaderResult =
+  | {
+      ok: true;
+      publicId: string;
+      words: [string, string, string];
+      content: string;
+      expiresAt: number;
+      createdAt: number;
+      files: FileEntry[];
+    }
+  | { ok: false; kind: "invalid" | "missing" | "server"; error: string };
+
 export const Route = createFileRoute("/s/$sessionId")({
-  loader: async ({ params }) => {
+  head: ({ params }) => ({
+    meta: [
+      { name: "robots", content: "noindex, nofollow, noarchive" },
+    ],
+    links: [
+      { rel: "alternate", type: "text/plain", href: `/s/${params.sessionId}.txt` },
+      { rel: "alternate", type: "application/json", href: `/api/paste/${params.sessionId}` },
+    ],
+  }),
+  loader: async ({ params }): Promise<SessionLoaderResult> => {
     const parsed = parseSessionSlug(params.sessionId);
     if (!parsed) {
       return {
-        ok: false as const,
-        kind: "invalid" as const,
+        ok: false,
+        kind: "invalid",
         error: "Use three dictionary words from the home page.",
       };
     }
     try {
       const data = await loadPaste({ data: { publicId: parsed.join("-") } });
-      return { ok: true as const, ...data };
+      return { ok: true, ...data };
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to open room";
-      const kind =
-        /invalid session|dictionary words/i.test(message) ? ("invalid" as const) : ("server" as const);
-      return { ok: false as const, kind, error: message };
+      const status = (e as { status?: number })?.status;
+      const kind: "invalid" | "missing" | "server" =
+        status === 404 || /not found/i.test(message)
+          ? "missing"
+          : /invalid session|dictionary words/i.test(message)
+            ? "invalid"
+            : "server";
+      return { ok: false, kind, error: message };
     }
   },
   component: SessionPage,
 });
 
 function SessionPage() {
-  const data = Route.useLoaderData();
+  const data = Route.useLoaderData() as SessionLoaderResult;
   const params = Route.useParams();
 
-  if (!data.ok) {
-    const title = data.kind === "invalid" ? "Invalid room code" : "Could not open room";
+  if (!data || !data.ok) {
+    const kind = data && "kind" in data ? data.kind : "server";
+    const error = data && "error" in data ? data.error : "Failed to open room";
+    const title =
+      kind === "invalid"
+        ? "Invalid room code"
+        : kind === "missing"
+          ? "Room not found"
+          : "Could not open room";
     return (
       <div className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center px-4 py-16">
         <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-2 text-sm text-[var(--color-fg-muted)]">{data.error}</p>
+        <p className="mt-2 text-sm text-[var(--color-fg-muted)]">
+          {kind === "missing"
+            ? "This three-word code has no room yet. Open it from the home page, or create it now."
+            : error}
+        </p>
         <p className="mt-1 font-mono text-xs text-[var(--color-fg-subtle)]">{params.sessionId}</p>
-        <Button asChild className="mt-6 w-fit">
-          <Link to="/">
-            <ArrowLeft className="size-4" />
-            Back home
-          </Link>
-        </Button>
+        <div className="mt-6 flex flex-wrap gap-2">
+          {kind === "missing" && parseSessionSlug(params.sessionId) && (
+            <Button
+              onClick={() => {
+                const id = parseSessionSlug(params.sessionId)?.join("-");
+                if (!id) return;
+                void fetch(`/api/paste/${id}`, { method: "POST" }).then((res) => {
+                  if (!res.ok) {
+                    toast.error("Could not create room");
+                    return;
+                  }
+                  window.location.reload();
+                });
+              }}
+            >
+              Create this room
+            </Button>
+          )}
+          <Button asChild variant={kind === "missing" ? "secondary" : "default"}>
+            <Link to="/">
+              <ArrowLeft className="size-4" />
+              Back home
+            </Link>
+          </Button>
+        </div>
       </div>
     );
   }
@@ -75,15 +131,7 @@ function SessionPage() {
   return <VaultWorkspace initial={data} />;
 }
 
-type VaultData = {
-  ok: true;
-  publicId: string;
-  words: [string, string, string];
-  content: string;
-  expiresAt: number;
-  createdAt: number;
-  files: FileEntry[];
-};
+type VaultData = Extract<SessionLoaderResult, { ok: true }>;
 
 function defaultFileName(): string {
   const d = new Date();
@@ -556,8 +604,98 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
               </li>
             ))}
           </ul>
+
+          <ForAgentsCard publicId={initial.publicId} />
         </aside>
       </div>
+    </div>
+  );
+}
+
+function ForAgentsCard({ publicId }: { publicId: string }) {
+  const [open, setOpen] = useState(false);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  const copy = async (text: string, label: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(`${label} copied`);
+    } catch {
+      toast.message(text);
+    }
+  };
+
+  const readCmd = `curl -fsS ${origin}/s/${publicId}.txt`;
+  const appendCmd = `curl -fsS -X POST ${origin}/api/paste/${publicId}/append \\\n  -H 'Content-Type: text/plain' \\\n  --data-binary $'## From agent $(date -u +%Y-%m-%dT%H:%M:%SZ)\\n...\\n'`;
+  const uploadCmd = `curl -fsS -F file=@out.diff ${origin}/api/paste/${publicId}/files`;
+
+  return (
+    <div className="border-t border-[var(--color-border)] p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left text-xs font-semibold text-[var(--color-fg)]"
+        aria-expanded={open}
+      >
+        For agents
+        <span className="text-[0.6875rem] font-medium text-[var(--color-fg-subtle)]">
+          {open ? "Hide" : "curl"}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 space-y-2">
+          <p className="text-[0.6875rem] leading-relaxed text-[var(--color-fg-subtle)]">
+            Read as plain text. Append — don't replace — unless you mean to.
+          </p>
+          <AgentCmd label="Read" cmd={readCmd} onCopy={() => void copy(readCmd, "Read command")} />
+          <AgentCmd
+            label="Append"
+            cmd={appendCmd}
+            onCopy={() => void copy(appendCmd, "Append command")}
+          />
+          <AgentCmd
+            label="Upload"
+            cmd={uploadCmd}
+            onCopy={() => void copy(uploadCmd, "Upload command")}
+          />
+          <a
+            href={`/s/${publicId}.txt`}
+            className="inline-block text-[0.6875rem] text-[var(--color-fg-muted)] underline-offset-2 hover:text-[var(--color-fg)] hover:underline"
+          >
+            Open .txt
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AgentCmd({
+  label,
+  cmd,
+  onCopy,
+}: {
+  label: string;
+  cmd: string;
+  onCopy: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="text-[0.6875rem] font-medium uppercase tracking-[0.08em] text-[var(--color-fg-subtle)]">
+          {label}
+        </p>
+        <button
+          type="button"
+          onClick={onCopy}
+          className="text-[0.6875rem] font-medium text-[var(--color-fg-muted)] hover:text-[var(--color-fg)]"
+        >
+          Copy
+        </button>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] p-2 font-mono text-[0.625rem] leading-relaxed text-[var(--color-fg-muted)]">
+        {cmd}
+      </pre>
     </div>
   );
 }

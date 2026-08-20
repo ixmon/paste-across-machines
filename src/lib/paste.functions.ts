@@ -22,7 +22,9 @@ export const loadPaste = createServerFn({ method: "GET" })
       };
     } catch (e) {
       if (e instanceof PasteError) {
-        throw new Error(e.message);
+        const err = new Error(e.message);
+        (err as Error & { status?: number }).status = e.status;
+        throw err;
       }
       throw e;
     }
@@ -49,11 +51,8 @@ export const savePaste = createServerFn({ method: "POST" })
 export const listPasteFiles = createServerFn({ method: "GET" })
   .validator(sessionSchema)
   .handler(async ({ data }) => {
-    const { listFiles, openOrCreateSession, PasteError } = await import(
-      "./paste-store.server"
-    );
+    const { listFiles, PasteError } = await import("./paste-store.server");
     try {
-      await openOrCreateSession(data.publicId);
       return await listFiles(data.publicId);
     } catch (e) {
       if (e instanceof PasteError) throw new Error(e.message);
