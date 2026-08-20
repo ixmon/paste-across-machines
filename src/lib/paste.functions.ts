@@ -18,6 +18,7 @@ export const loadPaste = createServerFn({ method: "GET" })
         content,
         expiresAt: meta.expiresAt,
         createdAt: meta.createdAt,
+        noteUpdatedAt: meta.noteUpdatedAt,
         files,
       };
     } catch (e) {
@@ -41,7 +42,7 @@ export const savePaste = createServerFn({ method: "POST" })
     const { writeNote, PasteError } = await import("./paste-store.server");
     try {
       const meta = await writeNote(data.publicId, data.content);
-      return { expiresAt: meta.expiresAt, savedAt: Date.now() };
+      return { expiresAt: meta.expiresAt, savedAt: Date.now(), noteUpdatedAt: meta.noteUpdatedAt };
     } catch (e) {
       if (e instanceof PasteError) throw new Error(e.message);
       throw e;

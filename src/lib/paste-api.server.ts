@@ -44,5 +44,6 @@ export function sessionPayload(
     createdAt: meta.createdAt,
     expiresAt: meta.expiresAt,
     lastAccessedAt: meta.lastAccessedAt,
+    noteUpdatedAt: meta.noteUpdatedAt,
   };
 }

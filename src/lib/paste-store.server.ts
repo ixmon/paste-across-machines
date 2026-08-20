@@ -17,6 +17,7 @@ export type SessionMeta = {
   createdAt: number;
   expiresAt: number;
   lastAccessedAt: number;
+  noteUpdatedAt: number;
   noteBytes: number;
   filesBytes: number;
 };
@@ -29,6 +30,7 @@ type SessionRow = {
   created_at: number | string;
   expires_at: number | string;
   last_accessed_at: number | string;
+  note_updated_at?: number | string | null;
   note_content: string;
   note_bytes: number | string;
 };
@@ -74,6 +76,7 @@ function rowToMeta(row: SessionRow, filesBytes = 0): SessionMeta {
     createdAt: num(row.created_at),
     expiresAt: num(row.expires_at),
     lastAccessedAt: num(row.last_accessed_at),
+    noteUpdatedAt: num(row.note_updated_at) || num(row.last_accessed_at) || num(row.created_at),
     noteBytes: num(row.note_bytes),
     filesBytes,
   };
@@ -92,10 +95,14 @@ async function ensurePasteSchema(sql: Sql): Promise<void> {
         created_at BIGINT NOT NULL,
         expires_at BIGINT NOT NULL,
         last_accessed_at BIGINT NOT NULL,
+        note_updated_at BIGINT,
         note_content TEXT NOT NULL DEFAULT '',
         note_bytes INT NOT NULL DEFAULT 0
       )
     `);
+    await sql.query(
+      `ALTER TABLE paste_sessions ADD COLUMN IF NOT EXISTS note_updated_at BIGINT`,
+    );
     await sql.query(`
       CREATE TABLE IF NOT EXISTS paste_files (
         id TEXT PRIMARY KEY,
@@ -184,8 +191,8 @@ export async function openOrCreateSession(publicId: string): Promise<SessionMeta
   const expiresAt = now + SESSION_TTL_MS;
   await sql.query(
     `INSERT INTO paste_sessions
-      (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_content, note_bytes)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, '', 0)
+      (public_id, word1, word2, word3, created_at, expires_at, last_accessed_at, note_updated_at, note_content, note_bytes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, '', 0)
      ON CONFLICT (public_id) DO NOTHING`,
     [id, words[0], words[1], words[2], now, expiresAt, now],
   );
@@ -200,8 +207,12 @@ export async function openOrCreateSession(publicId: string): Promise<SessionMeta
   return rowToMeta(created[0], 0);
 }
 
-export async function getSession(publicId: string): Promise<SessionMeta | null> {
-  await purgeExpiredAndOverBudget();
+export async function getSession(
+  publicId: string,
+  opts: { touch?: boolean; purge?: boolean } = {},
+): Promise<SessionMeta | null> {
+  const touch = opts.touch !== false;
+  if (opts.purge !== false) await purgeExpiredAndOverBudget();
   assertSafePublicId(publicId);
   const id = publicId.toLowerCase().trim();
   const sql = await getSql();
@@ -216,6 +227,9 @@ export async function getSession(publicId: string): Promise<SessionMeta | null> 
     await sql.query(`DELETE FROM paste_sessions WHERE public_id = $1`, [id]);
     return null;
   }
+  if (!touch) {
+    return rowToMeta(row, await filesBytesFor(id));
+  }
   const now = Date.now();
   await sql.query(`UPDATE paste_sessions SET last_accessed_at = $2 WHERE public_id = $1`, [
     id,
@@ -226,8 +240,9 @@ export async function getSession(publicId: string): Promise<SessionMeta | null> 
 
 export async function readNote(
   publicId: string,
+  opts: { touch?: boolean; purge?: boolean } = {},
 ): Promise<{ meta: SessionMeta; content: string }> {
-  const meta = await getSession(publicId);
+  const meta = await getSession(publicId, opts);
   if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const rows = await sql.query<SessionRow>(
@@ -256,7 +271,7 @@ export async function writeNote(publicId: string, content: string): Promise<Sess
   const now = Date.now();
   await sql.query(
     `UPDATE paste_sessions
-     SET note_content = $2, note_bytes = $3, last_accessed_at = $4
+     SET note_content = $2, note_bytes = $3, last_accessed_at = $4, note_updated_at = $4
      WHERE public_id = $1`,
     [meta.publicId, content, bytes, now],
   );
@@ -265,6 +280,7 @@ export async function writeNote(publicId: string, content: string): Promise<Sess
     ...meta,
     noteBytes: bytes,
     lastAccessedAt: now,
+    noteUpdatedAt: now,
   };
 }
 
@@ -303,8 +319,11 @@ function sanitizeFileName(name: string): string {
   return base || "file";
 }
 
-export async function listFiles(publicId: string): Promise<FileEntry[]> {
-  const meta = await getSession(publicId);
+export async function listFiles(
+  publicId: string,
+  opts: { touch?: boolean; purge?: boolean } = {},
+): Promise<FileEntry[]> {
+  const meta = await getSession(publicId, opts);
   if (!meta) throw new PasteError(404, "Room not found.");
   const sql = await getSql();
   const rows = await sql.query<FileRow>(

@@ -17,9 +17,13 @@ export const Route = createFileRoute("/api/paste/$sessionId")({
           return jsonError(400, "Invalid session code", undefined, request);
         }
         try {
-          const { readNote, listFiles } = await import("@/lib/paste-store.server");
-          const { meta, content } = await readNote(id);
           const url = new URL(request.url);
+          const watch = url.searchParams.get("watch") === "1";
+          const { readNote, listFiles } = await import("@/lib/paste-store.server");
+          const { meta, content } = await readNote(
+            id,
+            watch ? { touch: false, purge: false } : {},
+          );
           const wantText =
             url.searchParams.get("format") === "txt" ||
             (request.headers.get("accept") || "").includes("text/plain");
@@ -33,7 +37,7 @@ export const Route = createFileRoute("/api/paste/$sessionId")({
               },
             });
           }
-          const files = await listFiles(id);
+          const files = await listFiles(id, watch ? { touch: false, purge: false } : {});
           return Response.json(sessionPayload(meta, content, files), withApiHeaders({}, request));
         } catch (e) {
           return pasteCatch(e, request);

@@ -12,6 +12,7 @@ import {
   Loader2,
   Mic,
   MicOff,
+  RefreshCw,
   Save,
   Scissors,
   Trash2,
@@ -27,6 +28,7 @@ import { formatSessionLabel, parseSessionSlug } from "@/lib/words";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useTheme } from "@/hooks/use-theme";
 import { useSpeechDictation } from "@/hooks/use-speech-dictation";
+import { fileIdsKey, useRoomSync, type RemoteSnapshot } from "@/hooks/use-room-sync";
 
 type SessionLoaderResult =
   | {
@@ -36,6 +38,7 @@ type SessionLoaderResult =
       content: string;
       expiresAt: number;
       createdAt: number;
+      noteUpdatedAt?: number;
       files: FileEntry[];
     }
   | { ok: false; kind: "invalid" | "missing" | "server"; error: string };
@@ -160,6 +163,11 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const saveTimer = useRef<number | null>(null);
   const lastSaved = useRef(initial.content);
+  const contentRef = useRef(initial.content);
+  contentRef.current = content;
+  const [conflict, setConflict] = useState<RemoteSnapshot | null>(null);
+  const [liveAt, setLiveAt] = useState<number | null>(null);
+  const dismissedRemote = useRef<string | null>(null);
 
   useEffect(() => {
     const id = window.setInterval(() => setTimeLabel(formatTimeLeft(expiresAt)), 30_000);
@@ -177,6 +185,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
         lastSaved.current = text;
         setExpiresAt(res.expiresAt);
         setSaveState("saved");
+        setConflict(null);
       } catch (e) {
         setSaveState("error");
         toast.error(e instanceof Error ? e.message : "Save failed");
@@ -197,9 +206,6 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
     [persist],
   );
 
-  const contentRef = useRef(content);
-  contentRef.current = content;
-
   const speech = useSpeechDictation({
     getText: () => contentRef.current,
     onFinal: (next) => onChange(next),
@@ -214,6 +220,52 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
       if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
   }, []);
+
+  const filesRef = useRef(files);
+  filesRef.current = files;
+
+  const applyRemote = useCallback((snap: RemoteSnapshot, kind: "content" | "files") => {
+    setExpiresAt(snap.expiresAt);
+    if (kind === "content") {
+      lastSaved.current = snap.content;
+      setContent(snap.content);
+      setSaveState("saved");
+      setLiveAt(Date.now());
+    }
+    setFiles(snap.files);
+  }, []);
+
+  useRoomSync({
+    publicId: initial.publicId,
+    getLocal: () => contentRef.current,
+    getSynced: () => lastSaved.current,
+    getFileIds: () => fileIdsKey(filesRef.current),
+    onApply: applyRemote,
+    onConflict: (snap) => {
+      if (snap.content === dismissedRemote.current) return;
+      setConflict(snap);
+      setExpiresAt(snap.expiresAt);
+    },
+    onClearConflict: () => setConflict(null),
+  });
+
+  const acceptRemote = () => {
+    if (!conflict) return;
+    dismissedRemote.current = null;
+    applyRemote(conflict, "content");
+    setConflict(null);
+  };
+
+  const keepMine = () => {
+    if (conflict) dismissedRemote.current = conflict.content;
+    setConflict(null);
+  };
+
+  useEffect(() => {
+    if (!liveAt) return;
+    const t = window.setTimeout(() => setLiveAt(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [liveAt]);
 
   const label = useMemo(() => formatSessionLabel(initial.words), [initial.words]);
 
@@ -360,6 +412,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
           <p className="truncate text-sm font-semibold tracking-tight">{label}</p>
           <p className="truncate font-mono text-[0.6875rem] text-[var(--color-fg-subtle)]">
             {initial.publicId} · {timeLabel}
+            {liveAt ? " · live" : ""}
           </p>
         </div>
         <SaveBadge state={saveState} />
@@ -381,6 +434,22 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
           </ModeButton>
         </div>
       </header>
+
+      {conflict && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 sm:px-4">
+          <p className="min-w-0 flex-1 text-xs text-[var(--color-fg)]">
+            Updated on another machine. Reload to take that version — or keep typing; your next save
+            wins.
+          </p>
+          <Button size="sm" onClick={acceptRemote}>
+            <RefreshCw className="size-3.5" />
+            Reload
+          </Button>
+          <Button size="sm" variant="ghost" onClick={keepMine}>
+            Keep mine
+          </Button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <section className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-[var(--color-border)] lg:border-b-0 lg:border-r">

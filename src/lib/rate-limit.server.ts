@@ -9,7 +9,7 @@ const ipHits = new Map<string, Bucket>();
 let globalHits: number[] = [];
 
 const WINDOW_MS = 60_000;
-const PER_IP_MAX = 40;
+const PER_IP_MAX = 90;
 const GLOBAL_MAX = 400;
 const MISS_MAX = 8; // invalid slugs / 404s per IP per minute
 
