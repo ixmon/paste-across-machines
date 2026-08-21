@@ -238,7 +238,8 @@ function AgentHint({ slug }: { slug: string }) {
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-fg)]">Hand it to an agent</h2>
           <p className="mt-1 text-xs leading-relaxed text-[var(--color-fg-muted)]">
-            Same room, no extra protocol. Give them the link. They read the note, follow{" "}
+            Same room, no extra protocol. Give them the link, or mint an MCP bearer on the room
+            page and paste it into Grok's Add MCP server dialog. They read the note, follow{" "}
             <span className="font-mono"># AGENT</span>, and append. The other machine sees it live.
           </p>
         </div>

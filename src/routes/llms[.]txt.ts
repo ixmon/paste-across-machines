@@ -35,6 +35,12 @@ GET never creates a room. Unknown id → 404.
 Invalid three-word codes → 400.
 Aggressive polling → 429.
 
+MCP (opt-in, bearer required for read and write):
+  POST /mcp     JSON-RPC  Streamable HTTP
+  Authorization: Bearer pst_…
+  Tools: room_info, note_get, note_append, note_put, files_list
+  Mint/revoke tokens on the room page. Same token reads and writes.
+
 ## Convention
 
 If the note starts with "# AGENT", follow it.

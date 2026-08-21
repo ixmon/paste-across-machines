@@ -22,11 +22,12 @@ import { CodeEditor, type EditorMode } from "@/components/code-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loadPaste, removePasteFile, savePaste, saveRoomSkin } from "@/lib/paste.functions";
-import type { FileEntry } from "@/lib/paste-types";
+import type { FileEntry, McpTokenMeta } from "@/lib/paste-types";
 import { formatBytes, formatTimeLeft, cn } from "@/lib/utils";
 import { formatSessionLabel, parseSessionSlug } from "@/lib/words";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SkinPicker } from "@/components/skin-picker";
+import { McpPanel } from "@/components/mcp-panel";
 import { useTheme } from "@/hooks/use-theme";
 import { useSpeechDictation } from "@/hooks/use-speech-dictation";
 import { fileIdsKey, useRoomSync, type RemoteSnapshot } from "@/hooks/use-room-sync";
@@ -44,6 +45,7 @@ type SessionLoaderResult =
       noteUpdatedAt?: number;
       skin?: RoomSkinId;
       files: FileEntry[];
+      mcpTokens?: McpTokenMeta[];
     }
   | { ok: false; kind: "invalid" | "missing" | "server"; error: string };
 
@@ -714,6 +716,7 @@ function VaultWorkspace({ initial }: { initial: VaultData }) {
             ))}
           </ul>
 
+          <McpPanel publicId={initial.publicId} initial={initial.mcpTokens ?? []} />
           <ForAgentsCard publicId={initial.publicId} />
         </aside>
       </div>

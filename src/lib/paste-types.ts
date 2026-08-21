@@ -12,3 +12,10 @@ export type PasteSessionMeta = {
   expiresAt: number;
   createdAt: number;
 };
+
+export type McpTokenMeta = {
+  id: string;
+  label: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+};

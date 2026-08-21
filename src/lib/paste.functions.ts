@@ -19,6 +19,8 @@ export const loadPaste = createServerFn({ method: "GET" })
         await writeNote(meta.publicId, note);
       }
       const files = await listFiles(data.publicId);
+      const { listMcpTokens } = await import("./mcp-tokens.server");
+      const mcpTokens = await listMcpTokens(data.publicId);
       return {
         publicId: meta.publicId,
         words: meta.words,
@@ -28,6 +30,7 @@ export const loadPaste = createServerFn({ method: "GET" })
         noteUpdatedAt: meta.noteUpdatedAt,
         skin: meta.skin,
         files,
+        mcpTokens,
       };
     } catch (e) {
       if (e instanceof PasteError) {
@@ -99,6 +102,43 @@ export const saveRoomSkin = createServerFn({ method: "POST" })
     try {
       const meta = await setRoomSkin(data.publicId, data.skin);
       return { skin: meta.skin };
+    } catch (e) {
+      if (e instanceof PasteError) throw new Error(e.message);
+      throw e;
+    }
+  });
+
+export const createMcpTokenFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      publicId: z.string().min(5).max(120),
+      label: z.string().max(40),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { createMcpToken } = await import("./mcp-tokens.server");
+    const { PasteError } = await import("./paste-store.server");
+    try {
+      return await createMcpToken(data.publicId, data.label);
+    } catch (e) {
+      if (e instanceof PasteError) throw new Error(e.message);
+      throw e;
+    }
+  });
+
+export const revokeMcpTokenFn = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      publicId: z.string().min(5).max(120),
+      tokenId: z.string().min(4).max(64),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const { revokeMcpToken } = await import("./mcp-tokens.server");
+    const { PasteError } = await import("./paste-store.server");
+    try {
+      await revokeMcpToken(data.publicId, data.tokenId);
+      return { ok: true as const };
     } catch (e) {
       if (e instanceof PasteError) throw new Error(e.message);
       throw e;
