@@ -24,7 +24,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Agentic / human cut and paste across machines. Temporary three-word rooms, text, files under 100 MB. Gone in 24 hours.",
+          "Agentic / human cut and paste across machines. Three-word rooms, optional MCP bearer for Grok. Gone in 24 hours.",
       },
       { name: "theme-color", content: "#0a0a0b" },
     ],

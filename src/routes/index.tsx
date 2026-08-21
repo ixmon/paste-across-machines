@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { ArrowRight, Bot, Link2, Lock, Scissors } from "lucide-react";
+import { ArrowRight, Bot, KeyRound, Link2, Lock, Scissors } from "lucide-react";
 import { toast } from "sonner";
 import { TransferGraphic } from "@/components/transfer-graphic";
 import { CutEdge } from "@/components/cut-edge";
@@ -126,8 +126,8 @@ function LandingPage() {
               Agentic / human cut and paste
             </h1>
             <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-[var(--color-fg-muted)]">
-              Drop text or a file into a short-lived room. Open the same three-word code on the
-              other computer — or point an agent at the link. Gone in 24 hours.
+              Drop text or a file into a short-lived room. Share the three-word code, the link, or
+              an MCP bearer with Grok. Gone in 24 hours.
             </p>
           </section>
 
@@ -238,9 +238,8 @@ function AgentHint({ slug }: { slug: string }) {
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-[var(--color-fg)]">Hand it to an agent</h2>
           <p className="mt-1 text-xs leading-relaxed text-[var(--color-fg-muted)]">
-            Same room, no extra protocol. Give them the link, or mint an MCP bearer on the room
-            page and paste it into Grok's Add MCP server dialog. They read the note, follow{" "}
-            <span className="font-mono"># AGENT</span>, and append. The other machine sees it live.
+            Same room. Give them the link — they follow{" "}
+            <span className="font-mono"># AGENT</span> and append. The other machine sees it live.
           </p>
         </div>
       </div>
@@ -265,6 +264,20 @@ function AgentHint({ slug }: { slug: string }) {
         >
           {open ? "Hide curl" : "Show curl"}
         </Button>
+      </div>
+
+      <div className="mt-4 flex items-start gap-3 border-t border-[var(--color-border)] pt-4">
+        <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-[var(--radius-sm)] border border-[var(--color-border)] bg-[var(--color-bg)] text-[var(--color-fg-muted)]">
+          <KeyRound className="size-4" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-[var(--color-fg)]">MCP for Grok</h3>
+          <p className="mt-1 text-xs leading-relaxed text-[var(--color-fg-muted)]">
+            Off until you mint a bearer in the room. Then Grok → Connectors → Custom: URL{" "}
+            <span className="font-mono">{origin ? `${origin}/mcp` : "/mcp"}</span> plus the token.
+            Same key reads and writes. Tag it, add several, revoke any.
+          </p>
+        </div>
       </div>
 
       {open && (
