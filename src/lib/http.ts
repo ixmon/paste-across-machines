@@ -18,33 +18,37 @@ export function clientIp(request: Request): string {
   return "unknown";
 }
 
+/** Public site origin. Never the Vercel deployment host — Grok follows this. */
+export const PASTE_ORIGIN = "https://paste.grok.me";
+
 export function publicOrigin(request: Request): string {
-  const env = (process.env.PUBLIC_ORIGIN || process.env.APP_URL || "").replace(/\/$/, "");
+  const env = (process.env.PUBLIC_ORIGIN || "").replace(/\/$/, "");
   if (env) return env;
 
   const url = new URL(request.url);
-  const proto = (
-    request.headers.get("x-forwarded-proto") ||
-    url.protocol.replace(":", "") ||
-    "https"
+  const host = (
+    request.headers.get("host") ||
+    request.headers.get("x-forwarded-host") ||
+    url.host
   )
     .split(",")[0]!
-    .trim();
+    .trim()
+    .toLowerCase()
+    .split(":")[0]!;
 
-  const hosts = [request.headers.get("host"), request.headers.get("x-forwarded-host"), url.host]
-    .flatMap((h) => (h ? h.split(",") : []))
-    .map((h) => h.trim().toLowerCase())
-    .filter(Boolean);
-
-  const hostname = (h: string) => h.split(":")[0]!;
-  const grok = hosts.find((h) => /(^|\.)grok\.me$/.test(hostname(h)));
-  if (grok) return `https://${hostname(grok)}`;
-
-  const first = hosts[0] ? hostname(hosts[0]) : url.hostname;
-  if (first.endsWith("vercel.app") || first.endsWith("vercel.sh")) {
-    return "https://paste.grok.me";
+  if (host === "localhost" || host === "127.0.0.1") {
+    const proto = (
+      request.headers.get("x-forwarded-proto") ||
+      url.protocol.replace(":", "") ||
+      "http"
+    )
+      .split(",")[0]!
+      .trim();
+    const port = (request.headers.get("host") || url.host).split(":")[1];
+    return port ? `${proto}://${host}:${port}` : `${proto}://${host}`;
   }
-  return `${proto}://${hosts[0] || url.host}`.replace(/\/$/, "");
+
+  return PASTE_ORIGIN;
 }
 
 export function corsHeaders(request?: Request): Record<string, string> {

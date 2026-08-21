@@ -12,7 +12,7 @@ export const Route = createFileRoute("/.well-known/oauth-protected-resource/")({
         return Response.json(protectedResourceMetadata(origin), {
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=60",
+            "Cache-Control": "no-store",
             "Access-Control-Allow-Origin": "*",
           },
         });

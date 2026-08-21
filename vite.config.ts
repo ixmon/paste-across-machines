@@ -208,9 +208,14 @@ function wellKnownOAuthPlugin(): Plugin {
           res.end();
           return;
         }
-        const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080");
-        const proto = String(req.headers["x-forwarded-proto"] ?? "http").split(",")[0]!.trim();
-        const origin = `${proto}://${host.split(",")[0]!.trim()}`;
+        const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080")
+          .split(",")[0]!
+          .trim();
+        const hostname = host.split(":")[0]!;
+        const origin =
+          hostname === "localhost" || hostname === "127.0.0.1"
+            ? `http://${host}`
+            : "https://paste.grok.me";
         const body = JSON.stringify({
           resource: `${origin}/mcp`,
           authorization_servers: [origin],

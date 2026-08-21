@@ -12,7 +12,7 @@ export const Route = createFileRoute("/.well-known/oauth-authorization-server")(
         return Response.json(oauthMetadata(origin), {
           headers: {
             "Content-Type": "application/json",
-            "Cache-Control": "public, max-age=60",
+            "Cache-Control": "no-store",
             "Access-Control-Allow-Origin": "*",
           },
         });
