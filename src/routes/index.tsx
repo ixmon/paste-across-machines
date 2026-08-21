@@ -273,9 +273,10 @@ function AgentHint({ slug }: { slug: string }) {
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-[var(--color-fg)]">MCP for Grok</h3>
           <p className="mt-1 text-xs leading-relaxed text-[var(--color-fg-muted)]">
-            Off until you mint a bearer in the room. Then Grok → Connectors → Custom: URL{" "}
-            <span className="font-mono">{origin ? `${origin}/mcp` : "/mcp"}</span> plus the token.
-            Same key reads and writes. Tag it, add several, revoke any.
+            Off until you Allow it. Grok → Connectors → Custom →{" "}
+            <span className="font-mono">{origin ? `${origin}/mcp` : "/mcp"}</span>. If it asks for
+            OAuth, client ID <span className="font-mono">paste</span>, PKCE only, empty secret.
+            Then enter the three words on our Allow page. Tag it, add several, revoke any.
           </p>
         </div>
       </div>

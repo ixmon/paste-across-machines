@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { clientIp, ROBOTS_HEADERS } from "@/lib/http";
+import { clientIp, publicOrigin, ROBOTS_HEADERS } from "@/lib/http";
 import { limitedResponse, rateLimit } from "@/lib/rate-limit.server";
 
 function mcpCors(request: Request): Record<string, string> {
@@ -16,11 +16,12 @@ function mcpCors(request: Request): Record<string, string> {
 }
 
 function unauthorized(request: Request) {
+  const origin = publicOrigin(request);
   return new Response(JSON.stringify({ error: "Bearer token required" }), {
     status: 401,
     headers: {
       "Content-Type": "application/json",
-      "WWW-Authenticate": 'Bearer realm="paste-mcp"',
+      "WWW-Authenticate": `Bearer realm="paste-mcp", resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
       ...ROBOTS_HEADERS,
       ...mcpCors(request),
     },

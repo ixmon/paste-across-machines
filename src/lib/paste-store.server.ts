@@ -149,6 +149,21 @@ async function ensurePasteSchema(sql: Sql): Promise<void> {
     await sql.query(
       `CREATE INDEX IF NOT EXISTS paste_mcp_tokens_hash_idx ON paste_mcp_tokens (token_hash)`,
     );
+    await sql.query(`
+      CREATE TABLE IF NOT EXISTS paste_oauth_codes (
+        code_hash TEXT PRIMARY KEY,
+        client_id TEXT NOT NULL,
+        public_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        redirect_uri TEXT NOT NULL,
+        code_challenge TEXT NOT NULL,
+        expires_at BIGINT NOT NULL,
+        consumed_at BIGINT
+      )
+    `);
+    await sql.query(
+      `CREATE INDEX IF NOT EXISTS paste_oauth_codes_expires_at_idx ON paste_oauth_codes (expires_at)`,
+    );
   })().catch((err) => {
     schemaReady = null;
     throw err;

@@ -69,11 +69,15 @@ export function McpPanel({ publicId, initial }: McpPanelProps) {
 
   const grokBlurb = useMemo(
     () =>
-      `Grok → Connectors → New → Custom.
-URL: ${mcpUrl || "/mcp"}
-Authorization: paste the bearer (pst_…).
-Read and write use the same token.`,
-    [mcpUrl],
+      `Grok → Connectors → Custom → ${mcpUrl || "/mcp"}
+Grok will ask for OAuth. If it does not fill itself:
+  Client ID: paste
+  Secret: (empty)
+  Authorization: ${origin}/oauth/authorize
+  Token: ${origin}/oauth/token
+  Token auth: none (PKCE)
+Then Allow with this room’s three words.`,
+    [mcpUrl, origin],
   );
 
   return (
@@ -83,8 +87,9 @@ Read and write use the same token.`,
         MCP access
       </p>
       <p className="mt-1 text-[0.6875rem] leading-relaxed text-[var(--color-fg-muted)]">
-        Off until you mint a bearer. Paste URL + token into Grok's Add MCP server dialog.
-        Same token reads and writes this room. Revoke anytime.
+        Off until a bearer exists. Add the MCP URL in Grok; it should open our Allow page
+        (three words + tag). Manual bearers still work for CLI. Same key reads and writes.
+        Revoke anytime.
       </p>
 
       <p className="mt-2 font-mono text-[0.6875rem] break-all text-[var(--color-fg-subtle)]">

@@ -185,6 +185,47 @@ function pasteTxtPlugin(): Plugin {
     },
   };
 }
+
+function wellKnownOAuthPlugin(): Plugin {
+  return {
+    name: "paste-well-known-oauth",
+    apply: "serve",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        const hit =
+          pathOnly === "/.well-known/oauth-protected-resource" ||
+          pathOnly === "/.well-known/oauth-protected-resource/" ||
+          pathOnly === "/.well-known/oauth-protected-resource/mcp";
+        if (!hit) {
+          next();
+          return;
+        }
+        const method = (req.method ?? "GET").toUpperCase();
+        if (method === "OPTIONS") {
+          res.statusCode = 204;
+          res.setHeader("access-control-allow-origin", "*");
+          res.end();
+          return;
+        }
+        const host = String(req.headers["x-forwarded-host"] ?? req.headers.host ?? "localhost:8080");
+        const proto = String(req.headers["x-forwarded-proto"] ?? "http").split(",")[0]!.trim();
+        const origin = `${proto}://${host.split(",")[0]!.trim()}`;
+        const body = JSON.stringify({
+          resource: `${origin}/mcp`,
+          authorization_servers: [origin],
+          bearer_methods_supported: ["header"],
+          scopes_supported: ["paste"],
+        });
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.setHeader("access-control-allow-origin", "*");
+        res.setHeader("cache-control", "public, max-age=60");
+        res.end(method === "HEAD" ? "" : body);
+      });
+    },
+  };
+}
 // Keep `nitro` gated to `build` (the Vercel deploy target): enabled in dev it
 // opens a second dev-server port, which breaks the single-port preview.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
@@ -203,6 +244,7 @@ export default defineConfig(({ command }) => ({
   plugins: [
     pgliteBootstrapPlugin(),
     pasteTxtPlugin(),
+    wellKnownOAuthPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     tailwindcss(),
