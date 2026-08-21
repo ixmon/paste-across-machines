@@ -41,6 +41,11 @@ export const Route = createFileRoute("/oauth/token")({
   server: {
     handlers: {
       OPTIONS: async () => new Response(null, { status: 204, headers: cors }),
+      GET: async () =>
+        Response.json(
+          { error: "invalid_request", error_description: "POST application/x-www-form-urlencoded" },
+          { status: 405, headers: { ...cors, Allow: "POST, OPTIONS" } },
+        ),
       POST: async ({ request }) => {
         try {
           const grant = await readGrant(request);

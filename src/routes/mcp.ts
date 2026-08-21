@@ -63,19 +63,40 @@ export const Route = createFileRoute("/mcp")({
       GET: async ({ request }) => {
         const blocked = rateLimit(clientIp(request), "read");
         if (!blocked.ok) return limitedResponse(blocked.retryAfter, request);
+        const origin = publicOrigin(request);
         const { authenticateMcpBearer } = await import("@/lib/mcp-tokens.server");
         const auth = await authenticateMcpBearer(request.headers.get("authorization"));
-        if (!auth) return unauthorized(request);
-        return Response.json(
-          {
-            name: "paste.grok.me",
-            transport: "streamable-http",
-            room: auth.publicId,
-            label: auth.label,
-            protocol: "2025-03-26",
+        const accept = request.headers.get("accept") || "";
+        if (accept.includes("text/event-stream") && !auth) {
+          return unauthorized(request);
+        }
+        const body = auth
+          ? {
+              name: "paste.grok.me",
+              transport: "streamable-http",
+              room: auth.publicId,
+              label: auth.label,
+              protocol: "2025-03-26",
+            }
+          : {
+              name: "paste.grok.me",
+              transport: "streamable-http",
+              protocol: "2025-03-26",
+              authentication: {
+                type: "oauth2",
+                resource_metadata: `${origin}/.well-known/oauth-protected-resource`,
+                authorization_endpoint: `${origin}/oauth/authorize`,
+                token_endpoint: `${origin}/oauth/token`,
+                client_id: "paste",
+              },
+            };
+        return Response.json(body, {
+          headers: {
+            ...ROBOTS_HEADERS,
+            ...mcpCors(request),
+            "WWW-Authenticate": `Bearer realm="paste-mcp", resource_metadata="${origin}/.well-known/oauth-protected-resource"`,
           },
-          { headers: { ...ROBOTS_HEADERS, ...mcpCors(request) } },
-        );
+        });
       },
 
       POST: async ({ request }) => {

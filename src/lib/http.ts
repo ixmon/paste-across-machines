@@ -19,6 +19,9 @@ export function clientIp(request: Request): string {
 }
 
 export function publicOrigin(request: Request): string {
+  const env = (process.env.PUBLIC_ORIGIN || process.env.APP_URL || "").replace(/\/$/, "");
+  if (env) return env;
+
   const url = new URL(request.url);
   const proto = (
     request.headers.get("x-forwarded-proto") ||
@@ -27,14 +30,21 @@ export function publicOrigin(request: Request): string {
   )
     .split(",")[0]!
     .trim();
-  const host = (
-    request.headers.get("x-forwarded-host") ||
-    request.headers.get("host") ||
-    url.host
-  )
-    .split(",")[0]!
-    .trim();
-  return `${proto}://${host}`.replace(/\/$/, "");
+
+  const hosts = [request.headers.get("host"), request.headers.get("x-forwarded-host"), url.host]
+    .flatMap((h) => (h ? h.split(",") : []))
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+
+  const hostname = (h: string) => h.split(":")[0]!;
+  const grok = hosts.find((h) => /(^|\.)grok\.me$/.test(hostname(h)));
+  if (grok) return `https://${hostname(grok)}`;
+
+  const first = hosts[0] ? hostname(hosts[0]) : url.hostname;
+  if (first.endsWith("vercel.app") || first.endsWith("vercel.sh")) {
+    return "https://paste.grok.me";
+  }
+  return `${proto}://${hosts[0] || url.host}`.replace(/\/$/, "");
 }
 
 export function corsHeaders(request?: Request): Record<string, string> {
